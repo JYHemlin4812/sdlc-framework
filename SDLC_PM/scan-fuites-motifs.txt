@@ -1,0 +1,10 @@
+# Level-2 patterns (internal zone) for the leak scan (scan-fuites.ps1 / scan-fuites.sh).
+# One regex per line (.NET for scan-fuites.ps1, POSIX ERE for scan-fuites.sh);
+# blank lines and '#' comments are ignored. This file lives in the internal zone
+# (SDLC_PM/), so it may hold private tokens without being flagged itself.
+# Keep it inside SDLC_PM/: moving it elsewhere changes the zoning.
+#
+# Add the private tokens you want to keep out of the public tree (your name,
+# e-mail, local paths, internal domains), one per line, e.g.:
+#   Jane Doe
+#   jane\.doe@example\.com

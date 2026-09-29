@@ -1,0 +1,4 @@
+# Byte-exact snapshot: no end-of-line (EOL) or text conversion.
+# Ensures a clone / restore reproduces exactly the bytes captured from ~/.claude
+# (the sync safety net must preserve bytes, notably CRLF .ps1 scripts).
+* -text

@@ -1,0 +1,15 @@
+{
+  "version": "3.0",
+  "project_name": "fixture-pass",
+  "primary_language": "python",
+  "model_profile": "balanced",
+  "asvs_level": 0,
+  "auto_approve": false,
+  "max_retry_per_task": 3,
+  "fresh_context_per_task": true,
+  "wave_parallelism": true,
+  "max_parallel_agents": 4,
+  "soft_failure_escalation": true,
+  "test_coverage_min": 0.7,
+  "code_lock_enabled": true
+}

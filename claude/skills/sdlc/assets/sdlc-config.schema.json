@@ -1,0 +1,121 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/sdlc/sdlc-config.schema.json",
+  "title": "SDLC project configuration",
+  "description": "SDLC project configuration, stored at the root of SDLC_PM/.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "project_name", "primary_language", "model_profile"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "enum": ["3.0", "3.1", "3.2", "4.0"],
+      "description": "Configuration schema version. '3.0' = standalone bundle (absolute paths), '3.1' = system install (~/.claude/), '3.2' = + documentation tiers + HANDOFF/RESUME, '4.0' = English rewrite + output_language."
+    },
+    "project_name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80,
+      "pattern": "^[a-zA-Z0-9_\\-]+$",
+      "description": "Project name (slug). Letters, digits, hyphens, underscores."
+    },
+    "output_language": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Language (BCP 47 tag or plain name, e.g. \"fr\", \"en\", \"es\") in which SDLC artifacts and user-facing messages are written. Instructions, identifiers and section markers stay in English. Asked at /sdlc:init; defaults to the language the user writes in."
+    },
+    "primary_language": {
+      "type": "string",
+      "enum": ["python", "javascript", "typescript", "go", "rust"],
+      "description": "Main programming language of the project; selects the standards loaded by the sdlc-lang-dispatcher sub-skill."
+    },
+    "secondary_languages": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["python", "javascript", "typescript", "go", "rust"]
+      },
+      "uniqueItems": true,
+      "default": [],
+      "description": "Additional programming languages present in the project (multi-stack)."
+    },
+    "model_profile": {
+      "type": "string",
+      "enum": ["budget", "balanced", "quality", "inherit"],
+      "default": "balanced",
+      "description": "Default model profile. budget=Haiku, balanced=Haiku for simple tasks/Sonnet for execution/Opus for architecture, quality=Sonnet for simple tasks/Opus elsewhere, inherit=same model as the main session."
+    },
+    "model_overrides": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "enum": ["claude-haiku-4-5", "claude-sonnet-5", "claude-opus-5-5"]
+      },
+      "default": {},
+      "description": "Per-agent model overrides (key = agent name, value = model ID). E.g. {\"sdlc-architect\": \"claude-opus-5-5\"}."
+    },
+    "auto_approve": {
+      "type": "boolean",
+      "default": false,
+      "description": "Semi-autonomous mode: skips the Y/N confirmations between tasks. Code Lock and the AQ Gate stay active."
+    },
+    "asvs_level": {
+      "type": "integer",
+      "enum": [0, 1, 2, 3],
+      "default": 1,
+      "description": "OWASP ASVS level applied. 0=disabled, 1=basic (default), 2=recommended, 3=high security."
+    },
+    "max_retry_per_task": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 10,
+      "default": 3,
+      "description": "Maximum attempts before a P### becomes 🚫 (blocked)."
+    },
+    "fresh_context_per_task": {
+      "type": "boolean",
+      "default": true,
+      "description": "Spawns a subagent (Agent tool, fresh context) for each P###. Disable if API cost is critical."
+    },
+    "wave_parallelism": {
+      "type": "boolean",
+      "default": true,
+      "description": "Runs the P### of the same wave in parallel. Disable for sequential execution (debugging)."
+    },
+    "max_parallel_agents": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 16,
+      "default": 4,
+      "description": "Maximum number of subagents run at the same time within a wave."
+    },
+    "soft_failure_escalation": {
+      "type": "boolean",
+      "default": true,
+      "description": "When a P### fails, retries once with the next model tier up (Haiku→Sonnet, Sonnet→Opus)."
+    },
+    "test_coverage_min": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "default": 0.7,
+      "description": "Minimum test coverage required by the AQ Gate (0.7 = 70%)."
+    },
+    "code_lock_enabled": {
+      "type": "boolean",
+      "default": true,
+      "description": "Enables the Code Lock rule. Disable it only for the SDLC tooling itself."
+    },
+    "documentation_tier": {
+      "type": "string",
+      "enum": ["none", "minimal", "standard", "full", "exhaustive"],
+      "default": "standard",
+      "description": "Amount of documentation the framework produces, proportional to project size. none=one-liner (nothing), minimal=small project (HANDOFF+RESUME), standard=medium project (+0_context + light 1_elicitation + 3_conception), full=large project (complete E→A→P→T cycle + ADRs), exhaustive=colossal project (full + ASVS L2+ + hooks + archive). See references/documentation-tiers.md."
+    },
+    "project_size_estimate": {
+      "type": "string",
+      "enum": ["one-liner", "small", "medium", "large", "colossal"],
+      "description": "Initial estimate of the project size, asked at /sdlc:init. Used to suggest a default documentation_tier (one-liner→none, small→minimal, medium→standard, large→full, colossal→exhaustive). Can be changed after init."
+    }
+  }
+}

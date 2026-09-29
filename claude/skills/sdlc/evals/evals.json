@@ -1,0 +1,73 @@
+{
+  "skill_name": "sdlc",
+  "description": "Suite of 4 evals covering the 4 trigger categories of the sdlc skill. Evals 1 and 4 use French prompts on purpose: they are trigger tests for French-speaking users (category marked '[FR trigger test]'); their artifacts are expected in French (output_language defaults to the user's language).",
+  "evals": [
+    {
+      "id": 1,
+      "eval_name": "sdlc-explicit-csv-parser",
+      "category": "Explicit SDLC / methodology [FR trigger test]",
+      "prompt": "ok faut que je code un truc en python qui lit un fichier CSV (Q4_sales.csv dans mon downloads) et qui me sort la marge — la colonne C c'est revenue, la colonne D c'est costs, je veux marge = (C-D)/C en pourcentage. Ah et faut que ça marche avec des CSV un peu sales (BOM, virgules dans les chiffres style 1,234.56, lignes vides). Je veux faire ça proprement avec un cadrage SDLC complet, pas juste un script jeté.",
+      "expected_output": "The SDLC orchestrator skill is triggered by a French prompt. Expected output: a 1_elicitation.md generated or described with ≥3 E### (CSV reading, margin computation, tolerance to dirty files) in MoSCoW + BDD criteria, written in French (the user's language). Final recommendation: '/sdlc:plan' or '/sdlc:discuss' depending on calibration.",
+      "files": [],
+      "assertions": [
+        {"id": "trigger-skill", "text": "The sdlc skill is mentioned/invoked in the output", "required": true},
+        {"id": "phase-elicitation", "text": "The output explicitly handles the Elicitation phase (1_elicitation.md or equivalent)", "required": true},
+        {"id": "moscow", "text": "MoSCoW prioritization is present (MUST/SHOULD/COULD/WON'T)", "required": true},
+        {"id": "min-3-e", "text": "At least 3 E### requirements are produced", "required": true},
+        {"id": "bdd-criteria", "text": "At least one MUST requirement has a BDD acceptance criterion (Given/When/Then, or the localized equivalent such as 'Étant donné… quand… alors…')", "required": true},
+        {"id": "next-step", "text": "The output explicitly recommends '/sdlc:plan' or '/sdlc:discuss' as the next step", "required": true},
+        {"id": "output-language", "text": "Artifact content and messages are in French while IDs and field markers stay in English", "required": false}
+      ]
+    },
+    {
+      "id": 2,
+      "eval_name": "structured-dev-js-github-issues",
+      "category": "Structured development intent",
+      "prompt": "Implement a JS module that fetches GitHub issues for facebook/react and stores them in a local SQLite cache. I want to be able to re-run it incrementally (only fetch new issues). Use TypeScript. Walk me through the SDLC properly, I don't want spaghetti code.",
+      "expected_output": "The sdlc skill is triggered even though the word 'SDLC' is not the main cue (structured-development intent). The output detects TypeScript as the language, mentions the lang-dispatcher sub-skill and the js-standards reference, and structures the work as E→A→P→T with Code Lock announced.",
+      "files": [],
+      "assertions": [
+        {"id": "trigger-skill", "text": "The sdlc skill is invoked", "required": true},
+        {"id": "language-detection", "text": "TypeScript is detected as the target language", "required": true},
+        {"id": "lang-dispatcher", "text": "The sdlc-lang-dispatcher sub-skill (or js-standards) is mentioned/used", "required": true},
+        {"id": "tracability-chain", "text": "The E→A→P→T structure is explained or used", "required": true},
+        {"id": "wave-mention", "text": "Execution waves (wave field) or the wave_planner are mentioned for P###", "required": false},
+        {"id": "code-lock", "text": "Code Lock is mentioned as a constraint before writing code", "required": true},
+        {"id": "incremental-fetch", "text": "The output captures the incremental requirement (resume / cache delta)", "required": true}
+      ]
+    },
+    {
+      "id": 3,
+      "eval_name": "quality-audit-asvs-l2",
+      "category": "Quality / audit / compliance",
+      "prompt": "Run an ASVS level 2 audit of the code in ./api/auth/ — I suspect tokens leaking into the logs and a POST endpoint without CSRF protection. Give me a structured report with severity and affected files.",
+      "expected_output": "The sdlc skill delegates to the sdlc-asvs-auditor sub-skill at level 2, explicitly invoking asvs_scanner.py or the asvs-l2.md reference. A structured report is expected (severity high/medium, file:line, ASVS-2.x pattern_id).",
+      "files": [],
+      "assertions": [
+        {"id": "trigger-skill", "text": "The sdlc skill is invoked", "required": true},
+        {"id": "asvs-auditor", "text": "The sdlc-asvs-auditor sub-skill is mentioned or used", "required": true},
+        {"id": "level-2", "text": "ASVS level L2 is explicitly used", "required": true},
+        {"id": "csrf-detection", "text": "Pattern ASVS-2.3 (missing CSRF) is cited or identified as relevant", "required": true},
+        {"id": "log-leak", "text": "The token leak into logs is addressed (existing pattern, pattern to add, or manual recommendation)", "required": false},
+        {"id": "structured-report", "text": "The report is structured (severity, file, line, or equivalent JSON format)", "required": true}
+      ]
+    },
+    {
+      "id": 4,
+      "eval_name": "discussion-phase-postgres-vs-sqlite",
+      "category": "Discussion phase [FR trigger test]",
+      "prompt": "On a un projet où on hésite entre Postgres et SQLite pour stocker une table d'événements (~10M lignes prévues, croissance 2M/an, mono-process pour l'instant). Fais-moi une phase Discussion proprement avant qu'on touche à l'architecture. C'est un projet de petite équipe, j'ai besoin de comprendre les trade-offs.",
+      "expected_output": "The sdlc skill is triggered by a French prompt and runs the Discussion phase. Output: 2_5_discussion.md in ADR-draft format (context, options evaluated, trade-offs, explicit recommendation, consequences for 2_architecture.md), written in French. At least 2 options evaluated with explicit trade-offs.",
+      "files": [],
+      "assertions": [
+        {"id": "trigger-skill", "text": "The sdlc skill is invoked", "required": true},
+        {"id": "discussion-phase", "text": "The Discussion phase (2_5_discussion.md) is explicitly invoked", "required": true},
+        {"id": "two-options", "text": "At least 2 options are evaluated (Postgres AND SQLite)", "required": true},
+        {"id": "trade-offs-table", "text": "A table or structured list of trade-offs is present (cost, complexity, scaling, etc.)", "required": true},
+        {"id": "recommendation", "text": "An explicit recommendation is given with its justification", "required": true},
+        {"id": "consequences-arch", "text": "The consequences for 2_architecture.md (A### to produce) are mentioned", "required": true},
+        {"id": "open-questions", "text": "Open questions or residual risks are noted", "required": false}
+      ]
+    }
+  ]
+}

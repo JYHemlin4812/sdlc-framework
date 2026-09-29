@@ -1,0 +1,31 @@
+# === Build / test / install artifacts (never versioned) ===
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.install-manifest.json
+_backups/
+workspace/
+
+# === Secrets & credentials — anchored patterns (no broad substring globs) ===
+# Note: deliberately no bare *secret* / *token* / config.json: they would swallow
+#       asvs_patterns.json, sdlc-config.schema.json, test fixtures, etc.
+.env
+.env.*
+*.pem
+*.key
+o365_token.txt
+**/o365_token.txt
+.credentials.json
+**/.credentials.json
+
+# === Private / client data (leak prevention) ===
+/Clients/
+/perso/
+
+# === Generic private overlay — never tracked by git ===
+*.local.md
+
+# === OS ===
+.DS_Store
+Thumbs.db

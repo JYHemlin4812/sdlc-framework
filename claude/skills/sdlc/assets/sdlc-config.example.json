@@ -1,0 +1,20 @@
+{
+  "version": "4.0",
+  "project_name": "example-project",
+  "output_language": "en",
+  "primary_language": "python",
+  "secondary_languages": [],
+  "model_profile": "balanced",
+  "model_overrides": {},
+  "auto_approve": false,
+  "asvs_level": 1,
+  "max_retry_per_task": 3,
+  "fresh_context_per_task": true,
+  "wave_parallelism": true,
+  "max_parallel_agents": 4,
+  "soft_failure_escalation": true,
+  "test_coverage_min": 0.7,
+  "code_lock_enabled": true,
+  "documentation_tier": "standard",
+  "project_size_estimate": "medium"
+}

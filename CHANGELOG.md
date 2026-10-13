@@ -5,6 +5,13 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- `0_context.template.md`: a **Glossary** section (term, definition, aliases / not to be
+  confused with) so whoever picks up a project reads business terms with one agreed meaning.
+  Documentation only; the AQ Gate does not check it.
+
 ## [1.0.0] - 2026-09-28
 
 First public release — framework v4.0.

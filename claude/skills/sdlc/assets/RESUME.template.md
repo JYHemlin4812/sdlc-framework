@@ -121,7 +121,7 @@ If a step fails, see **Known pitfalls** in `HANDOFF.md`.
 
 ## Further reading (if tier ≥ standard)
 
-- `0_context.md` — state of the world, constraints, dated assumptions
+- `0_context.md` — state of the world, constraints, dated assumptions, glossary
 - `1_elicitation.md` — business requirements (E###)
 - `2_architecture.md` — architecture decisions (A### + ADR) — tier `full`+
 - `3_conception.md` — task breakdown (P### + waves)

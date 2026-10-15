@@ -30,7 +30,7 @@ bash bundle/scripts/install.sh
 ```
 
 The installer deploys the canonical content of `claude/` to `~/.claude/`:
-10 skills (`skills/sdlc*`), 18 slash commands (`commands/sdlc/`) and 12 agents
+11 skills (`skills/sdlc*`), 19 slash commands (`commands/sdlc/`) and 12 agents
 (`agents/sdlc-*`). It is idempotent (skipped when the checksum is unchanged), takes a
 timestamped backup before replacing any file, and refuses to overwrite a third-party skill
 of the same name. Full details: `INSTALL.md`.
@@ -105,6 +105,7 @@ the skill-creator layout: `SKILL.md` + `references/` (progressive disclosure) + 
 | `/sdlc:debug` | Root-cause debugging | diagnosis |
 | `/sdlc:evolve` | TDD (RED → GREEN → REFACTOR) | tested change |
 | `/sdlc:review` | Code review by a subagent | review report |
+| `/sdlc:stow` | Session sweep, durable knowledge with decay | `SDLC_PM/STOW.md` |
 | `/sdlc:finish` | Close a branch | merge / PR / keep / discard |
 
 Contracts for each command: `claude/skills/sdlc/references/slash-commands.md`.

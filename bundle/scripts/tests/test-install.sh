@@ -129,7 +129,7 @@ at "C0. commands sourced from top-level commands/sdlc" has "$SRC" 'commands/sdlc
 at "C0. commands NOT from the embedded copy"         hasnot "$SRC" 'skills/sdlc/commands/sdlc'
 
 # =======================================================================
-# (C1) real ref: DERIVED floors 10 / 12 / 18 (read-only)
+# (C1) real ref: DERIVED floors 11 / 12 / 19 (read-only)
 # =======================================================================
 printf -- '-- (C1) derived floors on the real ref (read-only) --\n'
 realRef="$(cd "$scriptsDir/../.." && pwd)/claude"
@@ -139,8 +139,8 @@ if [[ -d "$realRef" ]]; then
     realCmd=$(printf '%s\n' "$realGreen" | grep -c '^commands/sdlc/')
     realAgents=$(printf '%s\n' "$realGreen" | grep -c '^agents/')
     realCore=$(printf '%s\n' "$realGreen" | grep -cx 'NESTOR.md')
-    ae "C1. real ref: 10 sdlc* skills (derived)"     10 "$realSkills"
-    ae "C1. real ref: 18 commands (derived)"         18 "$realCmd"
+    ae "C1. real ref: 11 sdlc* skills (derived)"     11 "$realSkills"
+    ae "C1. real ref: 19 commands (derived)"         19 "$realCmd"
     ae "C1. real ref: 12 agents (sdlc-*, derived)"   12 "$realAgents"
     ae "C1. real ref: 0 NESTOR.md core (outside the SDLC domain)" 0 "$realCore"
 else

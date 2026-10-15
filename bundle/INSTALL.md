@@ -86,7 +86,7 @@ In any project, type:
 In a project without `SDLC_PM/`, the command reports that no SDLC project was found and
 suggests `/sdlc:init` or `/sdlc:brainstorm <description>`.
 
-The 18 commands are listed in `README.md`; their contracts are in
+The 19 commands are listed in `README.md`; their contracts are in
 `claude/skills/sdlc/references/slash-commands.md`.
 
 ---

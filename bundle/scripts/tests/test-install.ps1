@@ -157,7 +157,7 @@ try {
     Assert-True ($src -match "'commands'\) 'sdlc'")       "C0. commands source = top-level commands/sdlc"
 
     # =======================================================================
-    # (C1) real ref: DERIVED floors 10 / 12 / 18 (read-only, no writes)
+    # (C1) real ref: DERIVED floors 11 / 12 / 19 (read-only, no writes)
     # =======================================================================
     Write-Host "-- (C1) derived floors on the real ref (read-only) --" -ForegroundColor Cyan
     $realRef = Join-Path (Split-Path -Parent (Split-Path -Parent $scriptsDir)) 'claude'
@@ -167,8 +167,8 @@ try {
         $realCmd    = @($realGreen | Where-Object { $_ -like 'commands/sdlc/*' }).Count
         $realAgents = @($realGreen | Where-Object { $_ -like 'agents/*' }).Count
         $realCore   = @($realGreen | Where-Object { $_ -eq 'NESTOR.md' }).Count
-        Assert-Eq 10 $realSkills.Count "C1. real ref: 10 sdlc* skills (derived)"
-        Assert-Eq 18 $realCmd          "C1. real ref: 18 commands (derived)"
+        Assert-Eq 11 $realSkills.Count "C1. real ref: 11 sdlc* skills (derived)"
+        Assert-Eq 19 $realCmd          "C1. real ref: 19 commands (derived)"
         Assert-Eq 12 $realAgents       "C1. real ref: 12 agents (sdlc-*, derived)"
         Assert-Eq 0  $realCore         "C1. real ref: 0 NESTOR.md core (outside the SDLC domain)"
     } else {

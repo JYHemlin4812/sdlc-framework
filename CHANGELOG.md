@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and the `wave_worktrees` config key, default `auto`): a wave with a declared write
   conflict runs each P### in its own worktree and the branches are merged back after
   the wave. Idea adapted from kunchenguid/firstmate (MIT), implemented with stdlib and git only.
+- `sdlc-stow` sub-skill and `/sdlc:stow`: end-of-session sweep that captures durable
+  knowledge into `SDLC_PM/STOW.md` with tiered decay (pinned, aging 30 days,
+  perishable 7 days) and a git-ignored archive. `/sdlc:exit` can run it first. Concept
+  adapted from the `stow` skill of kunchenguid/firstmate (MIT).
 - `0_context.template.md`: a **Glossary** section (term, definition, aliases / not to be
   confused with) so whoever picks up a project reads business terms with one agreed meaning.
   Documentation only; the AQ Gate does not check it.

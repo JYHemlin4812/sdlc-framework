@@ -12,6 +12,9 @@ Write artifact content and user-facing messages in the project's `output_languag
 
 ## Steps
 
+0. **Optional: sweep the session first.** Run `/sdlc:stow` (the `sdlc-stow`
+   sub-skill) so durable findings are on disk in `STOW.md` before the handoff is
+   written; read its `Next steps` and `Gotchas` when filling step 1.
 1. **Regenerate `HANDOFF.md`** (tier `minimal` or above) from:
    - the last P### marked ✅ and the next P### to run
    - the last AQ Gate exit code

@@ -103,6 +103,7 @@ Lives at `SDLC_PM/sdlc-config.json` in the user's project, validated by
 | `auto_approve` | true / false | Skips Y/N confirmations |
 | `asvs_level` | 0 / 1 / 2 / 3 | ASVS level applied (0 = disabled) |
 | `wave_parallelism` | true / false | Parallel execution by waves |
+| `wave_worktrees` | auto / on / off | Per-task git worktrees for parallel waves (`auto` = only when a write conflict is declared) |
 | `fresh_context_per_task` | true / false | Spawn one subagent per P### via the Agent tool |
 | `max_parallel_agents` | 1..16 | Cap on simultaneous agents per wave |
 | `soft_failure_escalation` | true / false | Haiku→Sonnet→Opus on failure |

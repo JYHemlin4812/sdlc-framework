@@ -19,7 +19,7 @@
 
 Strict scope: `claude/` only — nothing outside this folder is covered here.
 
-### Skills (10)
+### Skills (11)
 
 | Skill | Role | Source |
 |---|---|---|
@@ -31,10 +31,11 @@ Strict scope: `claude/` only — nothing outside this folder is covered here.
 | `sdlc-lang-dispatcher` | Routes each P### to the language standards (Python/JS/Go/Rust) and the matching `sdlc-*-dev` agent | `claude/skills/sdlc-lang-dispatcher/SKILL.md` |
 | `sdlc-receive-review` | Receiving code review with rigor (verify before implementing) | `claude/skills/sdlc-receive-review/SKILL.md` |
 | `sdlc-reviewer` | Code review delegated to a dispatched subagent, on the diff + requirements | `claude/skills/sdlc-reviewer/SKILL.md` |
+| `sdlc-stow` | End-of-session sweep: captures durable knowledge into `SDLC_PM/STOW.md` with tiered decay and archive | `claude/skills/sdlc-stow/SKILL.md` |
 | `sdlc-verify` | Evidence before any completion claim: run the verification command and quote its result | `claude/skills/sdlc-verify/SKILL.md` |
-| `sdlc-wave-orchestrator` | Parallel execution of P### tasks in waves (topological DAG) | `claude/skills/sdlc-wave-orchestrator/SKILL.md` |
+| `sdlc-wave-orchestrator` | Parallel execution of P### tasks in waves (topological DAG), optional per-task git worktrees | `claude/skills/sdlc-wave-orchestrator/SKILL.md` |
 
-### Commands (18)
+### Commands (19)
 
 | Command | Role | Source |
 |---|---|---|
@@ -52,6 +53,7 @@ Strict scope: `claude/` only — nothing outside this folder is covered here.
 | `/sdlc:plan` | Architecture A### and task breakdown P### with wave column (phases 2+3) | `claude/commands/sdlc/plan.md` |
 | `/sdlc:report` | Concise markdown release report for a version | `claude/commands/sdlc/report.md` |
 | `/sdlc:resume` | Resume a session from `SDLC_CHECKPOINT.md` | `claude/commands/sdlc/resume.md` |
+| `/sdlc:stow` | Session sweep — captures durable knowledge into `SDLC_PM/STOW.md` (runs `sdlc-stow`) | `claude/commands/sdlc/stow.md` |
 | `/sdlc:review` | Code review by a dispatched subagent (runs `sdlc-reviewer`) | `claude/commands/sdlc/review.md` |
 | `/sdlc:security` | OWASP ASVS L1/L2/L3 scan (runs `sdlc-asvs-auditor`) | `claude/commands/sdlc/security.md` |
 | `/sdlc:status` | Markdown dashboard — current phase, wave, P###/T### counters | `claude/commands/sdlc/status.md` |

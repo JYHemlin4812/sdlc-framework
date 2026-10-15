@@ -11,6 +11,7 @@
   "max_retry_per_task": 3,
   "fresh_context_per_task": true,
   "wave_parallelism": true,
+  "wave_worktrees": "auto",
   "max_parallel_agents": 4,
   "soft_failure_escalation": true,
   "test_coverage_min": 0.7,

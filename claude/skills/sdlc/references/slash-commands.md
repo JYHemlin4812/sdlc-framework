@@ -119,6 +119,18 @@ Runs `scripts/check_sdlc.py` directly. See `references/aq-gate.md`.
 
 ---
 
+## `/sdlc:stow`
+
+**Phase**: any (typically before `/sdlc:exit`)
+**Output**: `SDLC_PM/STOW.md` updated, stale entries moved to `SDLC_PM/.stow-archive.md`
+**Precondition**: `SDLC_PM/` exists
+
+Runs the `sdlc-stow` sub-skill: sweeps the conversation for durable knowledge, files it as
+one-line tiered entries (pinned, aging 30 days, perishable 7 days) and archives stale ones
+with `scripts/stow_decay.py`.
+
+---
+
 ## `/sdlc:exit`
 
 **Phase**: checkpoint
@@ -126,6 +138,7 @@ Runs `scripts/check_sdlc.py` directly. See `references/aq-gate.md`.
 **Precondition**: none
 
 **Workflow**:
+0. Optional: run `/sdlc:stow` first so durable findings are on disk before the handoff
 1. Snapshot the state:
    - Current wave
    - P### in progress / last ✅

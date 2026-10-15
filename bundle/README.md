@@ -128,6 +128,7 @@ Lives in the project's `SDLC_PM/`. Validated by
   "max_retry_per_task": 3,
   "fresh_context_per_task": true,
   "wave_parallelism": true,
+  "wave_worktrees": "auto",
   "max_parallel_agents": 4,
   "documentation_tier": "standard",
   "project_size_estimate": "medium"

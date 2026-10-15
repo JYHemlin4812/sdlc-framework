@@ -32,7 +32,7 @@ Strict scope: `claude/` only — nothing outside this folder is covered here.
 | `sdlc-receive-review` | Receiving code review with rigor (verify before implementing) | `claude/skills/sdlc-receive-review/SKILL.md` |
 | `sdlc-reviewer` | Code review delegated to a dispatched subagent, on the diff + requirements | `claude/skills/sdlc-reviewer/SKILL.md` |
 | `sdlc-verify` | Evidence before any completion claim: run the verification command and quote its result | `claude/skills/sdlc-verify/SKILL.md` |
-| `sdlc-wave-orchestrator` | Parallel execution of P### tasks in waves (topological DAG) | `claude/skills/sdlc-wave-orchestrator/SKILL.md` |
+| `sdlc-wave-orchestrator` | Parallel execution of P### tasks in waves (topological DAG), optional per-task git worktrees | `claude/skills/sdlc-wave-orchestrator/SKILL.md` |
 
 ### Commands (18)
 

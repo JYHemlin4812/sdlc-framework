@@ -34,6 +34,8 @@ synchronizing between waves through a lockfile.
   (`**Dépend de**`, `**Fichiers cibles**`).
 - `scripts/lockfile_helper.py` — atomic mutex (O_EXCL) for concurrent
   mutations of `STATE.md`.
+- `scripts/worktree_helper.py` — one git worktree per P###, merged back after
+  the wave (see "Per-task worktrees").
 
 ## Wave computation (Kahn's algorithm)
 
@@ -215,10 +217,54 @@ To resolve a reported conflict:
 
 1. declare a dependency between the two P### (serializes them into separate
    waves), or
-2. isolate each subagent in a git worktree (Agent tool,
-   `isolation: "worktree"`) and merge after the wave, or
+2. run the wave in per-task worktrees (see "Per-task worktrees" below), or
 3. accept the risk knowingly (e.g. edits to disjoint sections of the same
    file).
+
+## Per-task worktrees
+
+`worktree_helper.py` gives each P### of a wave its own git worktree and branch
+(`.sdlc-worktrees/<P###>`, branch `sdlc/<P###>`), so parallel subagents never
+write into the same working tree. The orchestrator merges the branches back one
+by one after the wave. It needs a git repository and only starts from `HEAD`,
+so commit the work of the previous wave first.
+
+`wave_worktrees` in `SDLC_PM/sdlc-config.json` (default `auto`):
+
+| Value | Behavior |
+|---|---|
+| `auto` | Isolate a whole wave only when the Bernstein linter reports a write conflict in it |
+| `on` | Isolate every wave that has two or more P### |
+| `off` | Never isolate (the pre-existing behavior) |
+
+Per wave, when `wave_parallelism` is true:
+
+1. `python scripts/worktree_helper.py select --conception <3_conception.md> --wave N --mode <wave_worktrees>`
+   returns `isolate`, the P### to run isolated (empty = run as before).
+2. For each P### in `isolate`: `worktree_helper.py create --root . --task P###`
+   returns the worktree `path`. Add the worktree rules below to that P###'s
+   subagent prompt.
+3. Run the wave as usual (batches, lockfile on `STATE.md`).
+4. For each ✅ P###, in ID order: `worktree_helper.py merge --root . --task P###`.
+   Exit 0 means merged. Exit 1 means the merge conflicted and was aborted, with
+   `conflicts` listing the files: mark that P### 🔁, keep its worktree, and
+   re-run it after the other branches landed (or resolve by adding a
+   `**Depends on**` between the two P###).
+5. `worktree_helper.py cleanup --root . --task P###` once its branch is merged
+   or the P### is abandoned. Leave worktrees of 🔁/🚫 tasks in place for
+   `/sdlc:fix` to inspect.
+
+Worktree rules for the subagent prompt (add them only for isolated P###):
+
+```
+Work only inside {worktree_path}: it is a separate checkout of the project.
+Read and write SDLC_PM/ documents at {project_root}/SDLC_PM (absolute path),
+never at a copy inside the worktree. You may leave your changes uncommitted:
+the orchestrator commits and merges them.
+```
+
+The merge only carries code. `STATE.md`, `4_tests.md` and the other `SDLC_PM/`
+documents stay in the main tree, so the lockfile protocol is unchanged.
 
 ## Disabling parallelism
 

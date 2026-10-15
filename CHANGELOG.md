@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `sdlc-wave-orchestrator`: optional per-task git worktrees (`worktree_helper.py`
+  and the `wave_worktrees` config key, default `auto`): a wave with a declared write
+  conflict runs each P### in its own worktree and the branches are merged back after
+  the wave. Idea adapted from kunchenguid/firstmate (MIT), implemented with stdlib and git only.
 - `0_context.template.md`: a **Glossary** section (term, definition, aliases / not to be
   confused with) so whoever picks up a project reads business terms with one agreed meaning.
   Documentation only; the AQ Gate does not check it.

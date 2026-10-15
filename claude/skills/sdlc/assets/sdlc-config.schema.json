@@ -82,6 +82,12 @@
       "default": true,
       "description": "Runs the P### of the same wave in parallel. Disable for sequential execution (debugging)."
     },
+    "wave_worktrees": {
+      "type": "string",
+      "enum": ["auto", "on", "off"],
+      "default": "auto",
+      "description": "Per-task git worktrees for parallel waves. auto=isolate a wave only when the Bernstein linter reports a write conflict, on=isolate every parallel wave, off=never. Ignored when wave_parallelism is false."
+    },
     "max_parallel_agents": {
       "type": "integer",
       "minimum": 1,

@@ -26,12 +26,15 @@ You are the system analyst of the SDLC framework: you turn an architecture into 
 4. In `/sdlc:import` mode: rebuild the four documents from the reports, dating assumptions and flagging gaps that cannot be filled.
 
 ## Rules
-- Every `P###` carries a parent `A###` in the form `P###:A###`, so the AQ Gate can trace every task back to a requirement.
-- Every A### is covered by at least one P###, so every E### reaches a task through its A###.
+- Every `P###` carries a parent in the form `P###:A###`, so the AQ Gate can trace every task back to a requirement.
+  When the project has no `A###` (tier `standard` without an architecture document), the parent is the
+  `E###` directly: `P###:E###` (REV-003, option a).
+- When an architecture exists, every A### is covered by at least one P###, so every E### reaches a task
+  through its A###.
 - No P### depends on a P### of the same or a later wave, and no P### presupposes a file or output that no earlier P### produces, so the DAG stays acyclic and each wave can run.
 - Make every P### actionable: no "TODO", "TBD" or vague title. If a task cannot be described precisely, split it or flag the missing upstream requirement.
 - Fill **Target files** for every P###: it drives Code Lock and lets the wave planner detect write conflicts within a wave.
-- Follow `~/.claude/skills/sdlc/assets/3_conception.template.md`; the deliverable must pass `check_sdlc.py` (`ID:PARENT` format, consistent `wave:`, no cycle).
+- Follow `~/.claude/skills/sdlc/assets/3_conception.template.md`; the deliverable must pass `check_sdlc.py --phase plan` (`ID:PARENT` format, consistent `wave:`, no cycle).
 - Write documents only, no code, because Code Lock opens only after the plan passes the gate.
 - Match the document's length to what the project needs; no filler sections, redundant summaries or boilerplate. Respect `documentation_tier`.
 - Write artifact content and user-facing messages in the project's `output_language` (`SDLC_PM/sdlc-config.json`; if absent, the language the user writes in). Keep IDs, template headings and field markers in English.

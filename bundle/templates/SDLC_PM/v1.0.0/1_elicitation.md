@@ -115,7 +115,7 @@ environment (internal/external, known constraints).
 - [ ] No orphan E### / E### without a description
 - [ ] Business risks identified and mitigated
 - [ ] Sensitive data classified
-- [ ] AQ Gate: `check_sdlc.py` exit 0
+- [ ] AQ Gate: `check_sdlc.py --phase plan` exit 0
 
 > **Next**: run `/sdlc:discuss` to settle the key architecture choices, then
 > `/sdlc:plan` to produce the A### and P###.

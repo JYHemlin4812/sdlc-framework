@@ -74,7 +74,7 @@ then **proposes** a default tier, which the user can change.
   - `HANDOFF.md` + `RESUME.md` up to date
 - **Optional deliverables**: `2_architecture.md`, `4_tests.md`.
 - **Light** AQ Gate: checks E→P consistency (skipping A and T is accepted), and `HANDOFF.md` must
-  exist and be dated less than 7 days ago.
+  exist and be filled. A date older than 7 days is a warning, not a failure.
 - **When**: medium project, 1 week – 3 months.
 
 ### Tier `full`
@@ -87,7 +87,7 @@ then **proposes** a default tier, which the user can change.
   - `3_conception.md` (P###:A### + wave)
   - `4_tests.md` (T###:P### + coverage)
   - `HANDOFF.md` + `RESUME.md`
-- **Complete** AQ Gate: strict E→A→P→T + minimum coverage + ASVS L1+.
+- **Complete** AQ Gate: strict E→A→P→T, no unfilled placeholder, ASVS L1+. The gate does not measure test coverage.
 - **When**: serious project, more than 3 months, or production impact.
 
 ### Tier `exhaustive`
@@ -111,7 +111,7 @@ The SDLC orchestrator reads `documentation_tier` at the start of every command a
 | `/sdlc:brainstorm` | refuses | refuses | light E### (MUST only) | complete E### + BDD | as full + ASVS hints |
 | `/sdlc:plan` | refuses | refuses | simple P### | A###+P###+wave | as full + full ADR |
 | `/sdlc:dev` | free mode | free mode | wave orchestrator optional | wave orchestrator + fresh contexts | as full + pre-merge audit |
-| `/sdlc:gate` | n/a | checks HANDOFF date | checks E→P + HANDOFF | strict E→A→P→T | as full + ASVS L2+ |
+| `/sdlc:gate` | SKIPPED (nothing checked) | HANDOFF + RESUME present and filled; HANDOFF age is a warning | E→P + HANDOFF + RESUME, no placeholder | strict E→A→P→T, no placeholder, ASVS L1+ | as full, ASVS L2+ |
 | `/sdlc:exit` | n/a | updates HANDOFF | updates HANDOFF + 0_context | same + current phase | same + archive snapshot |
 | `/sdlc:report` | n/a | HANDOFF summary | same + requirements review | full version report | same + version log |
 
@@ -152,7 +152,7 @@ counter-productive. Recommended pattern:
 ```
 
 - **`code_lock_enabled: false`**: required, because Code Lock would otherwise block every change
-  to source files that have no ✅ P###, which makes it impossible to keep working on existing code.
+  to source files that have no planned P###, which makes it impossible to keep working on existing code.
 - **`documentation_tier: standard`**: the best return on effort. It captures the current state and
   the next actions without a full retrofit.
 - **`output_language`**: set it to the language the project's documentation should be written in.

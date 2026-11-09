@@ -6,7 +6,7 @@ argument-hint: "[--auto-approve] [--wave N] [--review-each] [--strict-confirm]"
 # /sdlc:dev
 
 **Phases 3+4** — Implementation and tests. Output: code, commits, updated `4_tests.md`.
-**Precondition**: AQ Gate ✅ on `2_architecture.md` and `3_conception.md`.
+**Precondition**: AQ Gate ✅ on `2_architecture.md` and `3_conception.md`, run as `check_sdlc.py --phase plan`.
 
 Write artifact content and user-facing messages in the project's `output_language` (`SDLC_PM/sdlc-config.json`; if absent, the language the user writes in). Keep IDs, template headings and field markers in English.
 

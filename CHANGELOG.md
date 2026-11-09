@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- AQ Gate (`check_sdlc.py`) now depends on `documentation_tier`. A standard project initialised
+  with the untouched templates used to pass (exit 0); unfilled template placeholders are now
+  errors at every tier except `none` and absent. The `minimal` tier checks `HANDOFF.md` and
+  `RESUME.md` instead of requiring a version folder. The `standard` tier accepts E→P without
+  `A###`/`T###`. Tier `none` reports SKIPPED, never PASS. `full` requires `asvs_level >= 1`,
+  `exhaustive` requires `>= 2`.
+- Version folders are compared by number (`v10.0.0` after `v9.0.0`), not alphabetically.
+- Placeholder detection compares document lines with the shipped templates, so partly filled
+  documents are caught and legitimate `<...>` values are not. `check_sdlc.py --phase plan` skips
+  `4_tests.md`, which is written during development; `/sdlc:plan` and `/sdlc:dev` use it.
+- The planned `--today` option (reference date for the HANDOFF age check) is available for tests.
+- An invalid `sdlc-config.json` exits 2, as documented.
+- The PowerShell wrapper reports `SKIPPED` and exposes `warnings` in its JSON output.
+- The documentation no longer claims that the gate measures test coverage.
+
+### Changed
+- Code Lock: writing code for a P### no longer requires status ✅. It requires a planned, unblocked P### whose
+  `--phase plan` gate passes. ✅ is set only after its T### pass with the output quoted. Developer agents, templates and
+  the reference documents follow this rule.
+
+- Optional skeletons (`2_architecture`, `4_tests`) shipped by earlier releases are recognised as not authored,
+  so projects created before the change keep passing. When a template changes, its previous digest is added to
+  `KNOWN_SHIPPED_SKELETONS` in `check_sdlc.py` first.
+- `check_sdlc.ps1` is saved as UTF-8 with BOM, so Windows PowerShell 5.1 reads its emoji literals correctly.
+- The workflow (SKILL.md, README in both languages) runs `--phase plan` before development and the release gate at the end.
+
 ### Added
 - `sdlc-wave-orchestrator`: optional per-task git worktrees (`worktree_helper.py`
   and the `wave_worktrees` config key, default `auto`): a wave with a declared write

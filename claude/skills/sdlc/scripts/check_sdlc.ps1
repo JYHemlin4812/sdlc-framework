@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     PowerShell wrapper for check_sdlc.py (SDLC AQ validator).
 
@@ -24,7 +24,9 @@
 [CmdletBinding()]
 param(
     [switch]$Json,
-    [string]$ProjectRoot = (Get-Location).Path
+    [string]$ProjectRoot = (Get-Location).Path,
+    [ValidateSet("plan", "release")][string]$Phase = "release",
+    [string]$Today = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -63,20 +65,26 @@ if (-not $pythonCmd) {
 $prevLocation = Get-Location
 try {
     Set-Location $ProjectRoot
-    $output = & $pythonCmd $pyScript 2>&1
+    $pyArgs = @("--phase", $Phase)
+if ($Today) { $pyArgs += @("--today", $Today) }
+$output = & $pythonCmd $pyScript @pyArgs 2>&1
     $exitCode = $LASTEXITCODE
 } finally {
     Set-Location $prevLocation
 }
 
-$status = switch ($exitCode) {
+$skipped = ($exitCode -eq 0) -and [bool]($output | Where-Object { $_ -match '^⏭ AQ SKIPPED' })
+$status = if ($skipped) { "SKIPPED" } else { switch ($exitCode) {
     0 { "PASS" }
     1 { "FAIL" }
     default { "ERROR" }
-}
+} }
 
 $errors = @($output | Where-Object { $_ -match '^❌' })
-$message = if ($exitCode -eq 0) { "AQ Gate passed" } else { "AQ Gate failed: $($errors.Count) error(s)" }
+$warnings = @($output | Where-Object { $_ -match '^⚠️' })
+$message = if ($skipped) { "AQ Gate skipped: documentation_tier none, nothing checked" }
+    elseif ($exitCode -eq 0) { "AQ Gate passed" }
+    else { "AQ Gate failed: $($errors.Count) error(s)" }
 
 if ($Json) {
     @{
@@ -85,6 +93,7 @@ if ($Json) {
         exitCode = $exitCode
         message = $message
         errors = $errors
+        warnings = $warnings
         projectRoot = $ProjectRoot
     } | ConvertTo-Json -Depth 4
 } else {

@@ -66,7 +66,7 @@ fallback, the loaded reference).
 
 Whatever the language, every subagent invoked for a P###:
 
-1. **Checks Code Lock** before writing (P### ✅ + AQ Gate ✅), so every change traces back
+1. **Checks Code Lock** before writing (planned P### + `--phase plan` gate passing), so every change traces back
    to an approved task.
 2. **Commits atomically**: one commit per finished P###.
 3. **Uses UTF-8** for all text files.

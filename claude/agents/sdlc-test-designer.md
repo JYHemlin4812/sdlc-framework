@@ -21,7 +21,7 @@ You are the test designer of the SDLC framework: you make sure every codable tas
 4. When the code exists, run the tests with `Bash` and record the real status (expected vs observed).
 
 ## Rules
-- Follow `~/.claude/skills/sdlc/assets/4_tests.template.md`; the deliverable must pass `check_sdlc.py`.
+- Follow `~/.claude/skills/sdlc/assets/4_tests.template.md`; the deliverable must pass `check_sdlc.py --phase plan` for its chain (the release gate runs at the end of the waves).
 - Every `T###` carries a parent `P###` in the form `T###:P###`, and every P### has at least one test, so the E→A→P→T chain is complete.
 - Record a failing test as ❌ with its output; never mark it ✅, because the gate and the user rely on these statuses.
 - Match the document's length to what the project needs; no filler sections, redundant summaries or boilerplate. Respect `documentation_tier`.

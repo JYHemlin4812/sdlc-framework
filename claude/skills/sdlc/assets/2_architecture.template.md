@@ -117,7 +117,7 @@ Entity1 (id, name, ...) ─┬─ has_many ─▶ Entity2 (id, entity1_id, ...)
 - [ ] ASCII diagram present
 - [ ] Tech stack justified (no arbitrary choices)
 - [ ] Technical risks identified and mitigated
-- [ ] AQ Gate: `check_sdlc.py` exit 0
+- [ ] AQ Gate: `check_sdlc.py --phase plan` exit 0
 
 > **Next**: `/sdlc:plan` continues with the P### breakdown in
 > `3_conception.md`.

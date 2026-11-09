@@ -3,9 +3,12 @@
 Modify a source file only when all three conditions hold:
 
 1. **A P### exists** in `3_conception.md` covering what the code will do.
-2. **That P### has status ✅** — it has been planned, its parent chain is correct and its
-   `**wave**` field is consistent.
-3. **`scripts/check_sdlc.py` returns exit code 0** — the full E→A→P→T chain is intact.
+2. **That P### is planned and not blocked** — its parent chain is correct, its `**wave**` field is
+   consistent, its **Target files** are declared, and its status is not 🚫. Status ✅ is not
+   required before writing: it is reserved for a finished, verified task (see below).
+3. **`scripts/check_sdlc.py --phase plan` returns exit code 0** — the planned E→A→P chain is intact (tests may still be pending). This authorizes writing the code of the P###.
+
+Marking a P### ✅ requires two things, each checked at its own moment: its T### pass (verified by `sdlc-verify`, with the output quoted), and `--phase plan` still exits 0. `--phase release` is the full check at the end of the waves, before a release. `SKIPPED` (tier `none`) is not a PASS.
 
 If any condition stops holding, the lock re-engages immediately.
 
@@ -35,7 +38,7 @@ Record it, do not fix it on the side. Procedure:
 2. **Record** the bug as a new E### in `1_elicitation.md`
    (e.g. `E045 — Crash on empty input in parse_csv`).
 3. **Re-plan**: `/sdlc:plan` produces an `A###:E045` and a `P###:A<new>`.
-4. **Validate**: `/sdlc:gate` must pass with the new chain.
+4. **Validate**: `check_sdlc.py --phase plan` must pass with the new chain; the release gate (`/sdlc:gate`) runs at the end of the waves.
 5. **Resume** P012, or take the new P### first, by priority.
 
 This is slow on purpose: it keeps rabbit holes from eating hours and keeps the fix traceable.
@@ -64,12 +67,12 @@ import re
 
 def can_modify(file_path: Path, pid: str, conception_md: Path) -> bool:
     content = conception_md.read_text(encoding="utf-8")
-    # Find the #### Pxxx section with a ✅ status
+    # Find the #### Pxxx section: planned, and not blocked (🚫)
     pattern = re.compile(rf"####\s+{pid}.*?(?=####|\Z)", re.DOTALL)
     section = pattern.search(content)
     if not section:
         return False
-    if "✅" not in section.group(0):
+    if "🚫" in section.group(0):
         return False
     # Check that file_path appears in "Target files" (legacy: "Fichiers cibles")
     return str(file_path) in section.group(0)

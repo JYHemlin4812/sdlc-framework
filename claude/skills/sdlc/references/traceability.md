@@ -50,14 +50,14 @@ A bug or hidden requirement found during implementation is **not** a new P###. I
 1. a new `E###` in `1_elicitation.md` (the root cause is a business need),
 2. a new `A###:E<new>` in `2_architecture.md` (the decision to address it),
 3. a new `P###:A<new>` in `3_conception.md` (the task),
-4. the original code stays locked until that new P### is ✅.
+4. the original code stays locked until that new P### is planned and its `--phase plan` gate passes.
 
 It is tedious on purpose: it prevents silent scope creep.
 
 ### Refactoring
 
 A refactoring is **not** automatically a new P###. If it changes no behavior and stays inside a
-file already covered by an existing ✅ P###, it can be committed under that P### (status goes
+file already covered by an existing planned P###, it can be committed under that P### (status goes
 back to 🔄 temporarily, then ✅ after the tests).
 
 If it reshapes the architecture (moves responsibilities, changes interfaces), it is a new

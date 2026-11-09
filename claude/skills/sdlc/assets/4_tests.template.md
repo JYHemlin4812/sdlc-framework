@@ -95,7 +95,7 @@ Status legend: ⬜ To do · 🔄 In progress · ✅ Pass · ❌ Fail · 🔁 In 
 - [ ] Measured coverage ≥ `test_coverage_min` (default 70%)
 - [ ] Edge cases identified for every unit T###
 - [ ] ASVS security tests run if `asvs_level >= 1`
-- [ ] AQ Gate: `check_sdlc.py` exit 0
+- [ ] AQ Gate: `check_sdlc.py --phase plan` exit 0 (release at the end of the waves)
 
 > **Next**: `/sdlc:gate` runs the final validation; on PASS, `/sdlc:report`
 > produces the version summary; otherwise run `/sdlc:fix` on the ❌ T###.

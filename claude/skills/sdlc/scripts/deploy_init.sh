@@ -34,6 +34,9 @@ declare -A MAPPINGS=(
     ["3_conception.template.md"]="${VERSION_DIR}/3_conception.md"
     ["4_tests.template.md"]="${VERSION_DIR}/4_tests.md"
     ["sdlc-config.example.json"]="${PM_DIR}/sdlc-config.json"
+    # Bootstrap files, required from tier minimal (inspection 7, 61.3.1). Same as deploy_init.ps1.
+    ["HANDOFF.template.md"]="${PM_DIR}/HANDOFF.md"
+    ["RESUME.template.md"]="${PM_DIR}/RESUME.md"
 )
 
 for src in "${!MAPPINGS[@]}"; do

@@ -80,9 +80,9 @@ Useful options (same in both scripts, native flag style per shell):
 /sdlc:brainstorm  → 1_elicitation.md (requirements E###)
 /sdlc:discuss     → 2_5_discussion.md (optional, M/L projects)
 /sdlc:plan        → 2_architecture.md (A###) + 3_conception.md (P### with waves)
-/sdlc:gate        → AQ Gate, exit 0 required to continue
+check_sdlc.py --phase plan → planning gate, exit 0 required before /sdlc:dev
 /sdlc:dev         → implementation wave by wave + test cases T### (--wave N, --auto-approve)
-/sdlc:gate        → then /sdlc:report for the release
+/sdlc:gate        → release gate at the end of the waves (default phase), then /sdlc:report
 ```
 
 ## Repository layout

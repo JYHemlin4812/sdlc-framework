@@ -22,7 +22,9 @@ argument-hint: "[project-root]"
    The script creates every skeleton file; you then decide which ones the tier requires.
 5. Write `"version": "4.0"`, `output_language`, `documentation_tier` and `project_size_estimate`
    to `SDLC_PM/sdlc-config.json`. Do this after step 4, because the script copies the example
-   config over it.
+   config over it. Also set `asvs_level` to match the tier: `full` needs 1 or more, `exhaustive`
+   needs 2. The example config ships with 1, and the AQ Gate rejects `exhaustive` below 2
+   (inspection 7, R04).
 6. Pre-fill `RESUME.md` (prerequisites detected in the project) and `HANDOFF.md`
    (10-line pitch + next 3 actions = the phases of the chosen tier), in `output_language`.
    Keep IDs, template headings and field markers in English.

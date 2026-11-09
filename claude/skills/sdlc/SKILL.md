@@ -71,7 +71,7 @@ English so the scripts can parse them.
    the task, its parent, the target files.
 
 3. **Autonomy is not permissiveness.** `--auto-approve` skips Y/N confirmations, but Code Lock and
-   the AQ Gate stay active. An autonomous agent still cannot write a file without a ✅ `P###` or
+   the AQ Gate stay active. An autonomous agent still cannot write a file without a planned `P###` that passes `--phase plan`, or
    pass a phase without a gate PASS; structural discipline replaces human supervision.
 
 4. **Parallel by default, can be switched off.** Independent `P###` (same wave according to
@@ -178,7 +178,7 @@ See `assets/HANDOFF.template.md`, `assets/RESUME.template.md`, `assets/0_context
 │  2_architecture.md (A###:E### + ADR)                                       │
 │  3_conception.md (P###:A### + wave + dependencies)                         │
 ├────────────────────────────────────────────────────────────────────────────┤
-│  /sdlc:gate  ✅ → /sdlc:dev                                                │
+│  check_sdlc.py --phase plan  ✅ → /sdlc:dev                                │
 │  ↓                                                                         │
 │  For each wave N (ascending):                                              │
 │    For each P### in the wave:                                              │
@@ -188,7 +188,7 @@ See `assets/HANDOFF.template.md`, `assets/RESUME.template.md`, `assets/0_context
 │      → ✅ or 🔁 (retry < max) or 🚫 (escalate)                             │
 │    [IF wave_parallelism] wait for the whole wave before the next one       │
 ├────────────────────────────────────────────────────────────────────────────┤
-│  /sdlc:gate  ✅                                                            │
+│  /sdlc:gate (release)  ✅                                                  │
 │  ↓                                                                         │
 │  → HANDOFF.md updated automatically (state + next actions)                 │
 │  → /sdlc:report → release                                                  │
@@ -224,8 +224,8 @@ Invocation contracts in `references/slash-commands.md`.
 ### Code Lock (reference: `references/code-lock.md`)
 
 Modify a source file only when:
-1. a P### exists in `3_conception.md` with status ✅,
-2. `check_sdlc.py` returns exit code 0,
+1. a P### exists in `3_conception.md`, planned and not blocked (🚫), with its Target files declared (status ✅ is set only after verification, not before writing),
+2. `check_sdlc.py --phase plan` returns exit code 0 (the planned chain is intact; `4_tests.md` may still be pending),
 3. any bug found while coding has been recorded in `1_elicitation.md` before further changes.
 
 This keeps every change traceable to a requirement. It can be disabled only when developing the
@@ -234,6 +234,8 @@ SDLC framework itself, via `code_lock_enabled: false`.
 ### AQ Gate (reference: `references/aq-gate.md`)
 
 `scripts/check_sdlc.py` is the single source of truth; no phase progresses without exit 0.
+Use `--phase plan` before development (planning validated; `4_tests.md` not yet required) and
+`--phase release` (the default) at the end of the waves.
 v3+ checks:
 - `ID:PARENT` format (A###:E###, P###:A###, T###:P###)
 - Consistent `wave: N` field (no cycle, no dependency on the same or a later wave)
@@ -287,8 +289,9 @@ explicit recommendation. `2_5_discussion.md` feeds the A### of phase 2 directly.
 
 1. Read `1_elicitation.md` (and `2_5_discussion.md` if present).
 2. Produce `2_architecture.md`: for each MUST/SHOULD E###, at least one `A###:E###` with an ADR
-   (context, decision, consequences).
-3. Produce `3_conception.md`: break each A### into P###:A### with:
+   (context, decision, consequences). At tier `standard`, architecture is optional (REV-003): skip
+   it unless asked, and derive the P### from the E### (`P###:E###`).
+3. Produce `3_conception.md`: break each A### into P###:A### (or each E### into P###:E### when no A### exists) with:
    - an initial `**wave**` field (`wave_planner.py` may recompute it)
    - a `**Depends on**` field listing prerequisite P###
    - a `**Target files**` field (declared write-set)
@@ -296,7 +299,7 @@ explicit recommendation. `2_5_discussion.md` feeds the A### of phase 2 directly.
    - Size S/M/L
    - the language, if multi-stack
 4. Run `wave_planner.py --annotate` to validate/recompute the waves.
-5. Run `check_sdlc.py` (AQ Gate). On ❌ → fix and rerun. On ✅ → announce `/sdlc:dev`.
+5. Run `check_sdlc.py --phase plan` (AQ Gate for planning; `4_tests.md` is not written yet). On ❌ → fix and rerun. On ✅ → announce `/sdlc:dev`.
 
 ### Phase 3 — `/sdlc:dev`
 
@@ -309,7 +312,7 @@ See `references/code-lock.md` and `references/auto-approve.md`. Workflow:
    a. If fresh_context_per_task=true: spawn via the Agent tool with:
       - subagent_type matching the language (resolved by sdlc-lang-dispatcher)
       - model resolved by model_profiler.py
-      - prompt = P### description + parent A### + Code Lock criteria
+      - prompt = P### description + parent (A### if the project has one, else E###) + Code Lock criteria
       - isolation: worktree (optional)
    b. Otherwise: run inline with the model resolved by model_profiler.
    c. Collect the result. On failure:
@@ -333,8 +336,10 @@ For each P### executed, create/update its T###:P### in `4_tests.md`. Target cove
 
 ### `/sdlc:gate`
 
-Runs `scripts/check_sdlc.py`. On exit 0, announce ✅ and recommend `/sdlc:report`. On exit 1,
-list the errors, suggest `/sdlc:fix <P###>` or a manual fix, and do not progress.
+Runs `scripts/check_sdlc.py --phase release` (the default; full check, at the end of the waves).
+On status PASS, announce ✅ and recommend `/sdlc:report`. On status SKIPPED (documentation_tier
+`none`), say that nothing was checked and do not announce ✅. On exit 1, list the errors, suggest
+`/sdlc:fix <P###>` or a manual fix, and do not progress.
 
 ### `/sdlc:security`
 
@@ -365,7 +370,7 @@ Effort is set per tier in the agent frontmatter: `simple` → `low`, `exec` → 
 Runs the `brainstorm → plan → dev → gate → report` chain without Y/N confirmations between
 steps. Safeguards that stay active:
 
-- ✅ Code Lock (refuses to write without a ✅ P###)
+- ✅ Code Lock (refuses to write without a planned P### and a passing `--phase plan` gate)
 - ✅ AQ Gate (refuses to progress without exit 0)
 - ✅ Max retries per P### (`max_retry_per_task`)
 - ✅ Parallel agent cap (`max_parallel_agents`)

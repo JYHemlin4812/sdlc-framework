@@ -59,7 +59,7 @@ See `references/discussion-phase.md`. Optional.
    - Input: `2_architecture.md`
    - Output: `3_conception.md` (P###:A### with `**Depends on**`, `**Target files**`, `**Status**`)
 3. Run `wave_planner.py --conception ... --annotate` to compute/annotate the `**wave**` fields
-4. Run `check_sdlc.py` (AQ Gate)
+4. Run `check_sdlc.py --phase plan` (AQ Gate for planning; `4_tests.md` is not written yet)
 5. On ✅: announce `/sdlc:dev`. On ❌: fix and rerun.
 
 ---

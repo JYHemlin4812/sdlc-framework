@@ -11,6 +11,10 @@ E### (root, no parent)              ← business requirement
             └─ T###:P### (test case) ← validation of the P###
 ```
 
+Exception, tier `standard` only: architecture is optional. When `2_architecture.md` holds no
+written A###, a P### hangs directly from its requirement (`P###:E###`). As soon as written A###
+exist, P### hang from them (`P###:A###`), at every tier.
+
 ## Uniqueness rules
 
 - Every ID is unique **across the whole project** (not per phase).
@@ -22,15 +26,16 @@ E### (root, no parent)              ← business requirement
 | Child | Allowed parent |
 |---|---|
 | A### | E### |
-| P### | A### |
+| P### | A### — or E### at tier `standard` when no A### is written |
 | T### | P### |
 
 A parent cannot be:
 - missing (orphan) — exit 1
 - undeclared (`P003` without `:Axxx`) — exit 1
 - of the wrong category (`P003:E001` instead of `P003:A001`) — not caught by the regex, but
-  blocked by the chaining rule (a P must have an A parent, which must itself exist in
-  `2_architecture.md`)
+  blocked by the chaining rule: the parent must exist among the A### of `2_architecture.md`
+  (or among the E### of `1_elicitation.md` for the standard exception above). Tiers `full`,
+  `exhaustive` and legacy configs without a tier stay strict: a P### always has an A### parent.
 
 ## Required coverage
 

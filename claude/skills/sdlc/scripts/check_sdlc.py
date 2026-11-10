@@ -62,7 +62,10 @@ HANDOFF_MAX_AGE_DAYS = 7
 # Fenced code blocks (``` or ~~~) are examples, not content.
 CODE_FENCE = re.compile(
     # An unclosed fence runs to the end of the file, as in GFM (AQG-002).
-    r"^[ \t]{0,3}(`{3,}|~{3,})([^\n]*)\n(.*?)(?:^[ \t]{0,3}\1[`~]*[ \t]*$|\Z)",
+    # A closing fence repeats the opening character only: ```~ does not close ``` (AQ-REV-101).
+    # A backtick fence's info string holds no backtick, so ```x``` is inline code (AQ-REV-201).
+    # The same pattern lives in sdlc-wave-orchestrator/scripts/wave_planner.py (test-pinned).
+    r"^[ \t]{0,3}(`{3,}(?=[^`\n]*$)|~{3,})([^\n]*)\n(.*?)(?:^[ \t]{0,3}\1(?:(?<=`)`*|(?<=~)~*)[ \t]*$|\Z)",
     re.DOTALL | re.MULTILINE,
 )
 # Command blocks in RESUME/HANDOFF hold required bootstrap steps (R02): they are checked.
@@ -81,14 +84,30 @@ def strip_fences(text: str, *, keep_commands: bool = False) -> str:
     return CODE_FENCE.sub(replace, text)
 ASSETS_DIR = Path(__file__).resolve().parent.parent / "assets"
 PHASES = ("plan", "release")
-LAST_UPDATED = re.compile(r"\*\*Last updated\*\*\s*:\s*([^\n]*)")
-ISO_DATE = re.compile(r"(\d{4})-(\d{2})-(\d{2})")
+# Field values are read on their own line: `\s` would cross into the next lines (AQ-EDGE-001/002).
+LAST_UPDATED = re.compile(r"\*\*Last updated\*\*[ \t]*:[ \t]*([^\n]*)")
+# The date opens the value (optionally in backticks), e.g. "`2026-11-10 10:30` by `Alice`" (AQ-EDGE-002).
+ISO_DATE = re.compile(r"^`?(\d{4})-(\d{2})-(\d{2})(?![\d])")
 
 
 def read_text(path: Path) -> str:
     if not path.exists():
         return ""
     return path.read_text(encoding="utf-8")
+
+
+def read_document(path: Path, errors: list[str]) -> str | None:
+    """Read a project document; an invalid UTF-8 file becomes an error line, not a traceback.
+
+    Returns None when the file cannot be decoded (the error is already recorded), "" when absent.
+    """
+    if not path.exists():
+        return ""
+    try:
+        return path.read_text(encoding="utf-8")
+    except UnicodeDecodeError as exc:
+        errors.append(f"{path.name} is not valid UTF-8 (byte {exc.start}): save it as UTF-8.")
+        return None
 
 
 def extract_ids(content: str, prefix: str) -> set[str]:
@@ -128,7 +147,10 @@ def load_config(project_root: Path) -> dict:
     if not config_path.exists():
         return {}
     try:
-        return json.loads(config_path.read_text(encoding="utf-8"))
+        # utf-8-sig: Windows PowerShell 5.1 writes a BOM with `-Encoding UTF8`.
+        return json.loads(config_path.read_text(encoding="utf-8-sig"))
+    except UnicodeDecodeError as exc:
+        raise SystemExit(f"❌ sdlc-config.json is not valid UTF-8 (byte {exc.start}).") from exc
     except json.JSONDecodeError as exc:
         raise SystemExit(f"❌ Invalid sdlc-config.json: {exc}") from exc
 
@@ -196,7 +218,8 @@ def detect_dag_cycles(content_p: str, waves: dict[str, int], errors: list[str]) 
     """
     deps: dict[str, set[str]] = {pid: set() for pid in waves}
     sections = re.split(r"^####\s+(P\d{3})", content_p, flags=re.MULTILINE)
-    dep_pattern = re.compile(r"\*\*(?:Depends on|D[ée]pend de)\*\*\s*:\s*([^\n]+)", re.IGNORECASE)
+    # Same line only: an empty value must not read the next lines (AQ-EDGE-001).
+    dep_pattern = re.compile(r"\*\*(?:Depends on|D[ée]pend de)\*\*[ \t]*:[ \t]*([^\n]*)", re.IGNORECASE)
     for i in range(1, len(sections), 2):
         pid = sections[i]
         body = sections[i + 1] if i + 1 < len(sections) else ""
@@ -327,8 +350,8 @@ def check_handoff(sdlc_dir: Path, today: date, errors: list[str], warnings: list
         errors.append("HANDOFF.md is missing (required from tier minimal).")
     if not resume.exists():
         errors.append("RESUME.md is missing (required from tier minimal).")
-    if resume.exists():
-        resume_text = resume.read_text(encoding="utf-8")
+    resume_text = read_document(resume, errors) if resume.exists() else None
+    if resume_text is not None:
         if not resume_text.strip():
             errors.append("RESUME.md is empty: it must hold the technical bootstrap.")
         # Bootstrap commands sit in code blocks and are required, so fences are not exempt (R02).
@@ -336,14 +359,16 @@ def check_handoff(sdlc_dir: Path, today: date, errors: list[str], warnings: list
             errors.append(f"Unfilled template placeholder in RESUME.md: {hit}")
     if not handoff.exists():
         return
-    text = handoff.read_text(encoding="utf-8")
+    text = read_document(handoff, errors)
+    if text is None:
+        return
     for hit in unfilled_placeholders(text, keep_fences=True):
         errors.append(f"Unfilled template placeholder in HANDOFF.md: {hit}")
     # The template placeholder line itself is caught above (template-line matching). Here only the
     # date is validated: an author may legitimately write `<email>` after it (inspection 4, R03).
-    match = LAST_UPDATED.search(text)
-    value = match.group(1) if match else ""
-    date_match = ISO_DATE.search(value)
+    match = LAST_UPDATED.search(strip_fences(text))  # an example date inside a code block is not the date (IR-004)
+    value = match.group(1).strip() if match else ""
+    date_match = ISO_DATE.match(value)
     if not date_match:
         errors.append("HANDOFF.md has no readable '**Last updated**' date (YYYY-MM-DD).")
         return
@@ -399,9 +424,12 @@ def check_chain(current_v: Path, tier: str | None, errors: list[str], phase: str
 
     # At phase plan, 4_tests.md is written during development: it is not read at all (R01, R03).
     contents = {
-        prefix: ("" if phase == "plan" and prefix == "T" else read_text(current_v / fname))
+        prefix: ("" if phase == "plan" and prefix == "T" else read_document(current_v / fname, errors))
         for prefix, fname in CHAIN_FILES.items()
     }
+    if any(content is None for content in contents.values()):
+        return  # an undecodable document: its error line is recorded, the chain cannot be checked
+    contents = {prefix: content or "" for prefix, content in contents.items()}
     if standard:
         # deploy_init copies every template. At standard, an optional document still identical
         # to its shipped template was never authored, so it is treated as absent (R04).

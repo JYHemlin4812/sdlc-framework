@@ -5,7 +5,8 @@
 > English so the tooling can parse them.
 
 > SDLC phase 3. Breaks each A### into **codable** tasks identified as
-> **P###:A###**. The `wave: N` field (integer ≥ 1) enables parallel execution
+> **P###:A###** (at tier standard without any written A###: **P###:E###**).
+> The `wave: N` field (integer ≥ 1) enables parallel execution
 > by waves through `wave_planner.py`.
 
 ---
@@ -118,7 +119,7 @@ subagent through the `Agent` tool (fresh context).
 
 ## Phase 3 checklist
 
-- [ ] Every P### has the form `P###:A###` (existing parent)
+- [ ] Every P### has the form `P###:A###` (existing parent), or `P###:E###` at tier standard when no A### is written
 - [ ] `wave: N` field present, integer ≥ 1
 - [ ] No cycle in the DAG (checked by `wave_planner.py`)
 - [ ] No `Depends on` pointing to a wave ≥ the current wave

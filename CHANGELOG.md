@@ -22,6 +22,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - An invalid `sdlc-config.json` exits 2, as documented.
 - The PowerShell wrapper reports `SKIPPED` and exposes `warnings` in its JSON output.
 - The documentation no longer claims that the gate measures test coverage.
+- `wave_planner.py` (and `worktree_helper.py select`, which relies on it) ignores code blocks: an
+  example `#### P999` in a fenced block no longer becomes a task, a write-set or an annotated wave.
+  Annotation rewrites only the wave number, so text around it (a code block included) is kept.
+- A code block closes only on a fence of its opening character (```` ```~ ```` no longer closes
+  ```` ``` ````), in both `check_sdlc.py` and `wave_planner.py`; a test keeps the two patterns equal.
+  Inline code such as ```` ```x``` ```` no longer opens a block that hid the rest of the document.
+  A differential test checks the fence rule against a CommonMark parser (`markdown-it-py`, when
+  installed).
+- `wave_planner.py --annotate` inserts a missing `wave` field after the whole heading line, so
+  `#### P001:A001 — Title` keeps its parent link.
+- Field values (`Depends on`, `Target files`, `Last updated`) are read on their own line: an
+  empty value no longer picks up the next lines, and the HANDOFF date must open the value.
+- The PowerShell wrapper returns its JSON `ERROR` response under Windows PowerShell 5.1 when
+  Python writes to stderr, instead of stopping without output.
+- The HANDOFF `**Last updated**` date is read outside code blocks, so an example date no longer
+  satisfies or skews the age check.
+- A project document that is not valid UTF-8 is reported as a `❌` line (exit 1) instead of a
+  traceback; an undecodable `sdlc-config.json` exits 2. The config is read with a tolerated BOM
+  (`check_sdlc.py`, `model_profiler.py`).
+- `deploy_init.ps1` writes `sdlc-config.json` without a BOM under Windows PowerShell 5.1.
+  `deploy_init.sh` now copies `0_context.md`, like the PowerShell version.
+- `/sdlc:plan`: the planning gate runs once, after the system analyst; the architect no longer has
+  to pass a check on a `3_conception.md` that does not exist yet. A P### hangs from an A### whenever
+  written A### exist, and from an E### only when there is none.
 
 ### Changed
 - Code Lock: writing code for a P### no longer requires status ✅. It requires a planned, unblocked P### whose

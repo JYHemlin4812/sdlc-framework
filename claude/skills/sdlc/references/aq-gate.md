@@ -54,7 +54,8 @@ Test coverage is not measured by the gate. `test_coverage_min` is a project targ
 1. `SDLC_PM/vX.X.X/` exists (the most recent one is checked)
 2. `1_elicitation.md` is not empty and contains ≥ 1 E###
 3. Every A### declares an existing parent E### (`A###:E###`)
-4. Every P### declares an existing parent A### (`P###:A###`)
+4. Every P### declares an existing parent A### (`P###:A###`); at tier `standard` with no A###
+   written, an existing parent E### (`P###:E###`)
 5. Every T### declares an existing parent P### (`T###:P###`)
 6. No duplicate ID anywhere
 7. No active blocker (`🚫` or `[B]` in the .md files)

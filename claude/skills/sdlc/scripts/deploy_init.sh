@@ -4,7 +4,8 @@
 # Usage:
 #   ./deploy_init.sh [project_root] [--force]
 #
-# Creates SDLC_PM/v1.0.0/ with the 5 phase templates and the example config.
+# Creates SDLC_PM/v1.0.0/ with 0_context.md and the 5 phase templates, HANDOFF.md and
+# RESUME.md at the SDLC_PM/ root, and the example config.
 
 set -euo pipefail
 
@@ -28,6 +29,8 @@ fi
 mkdir -p "$VERSION_DIR"
 
 declare -A MAPPINGS=(
+    # Context (versioned), from tier standard. Same as deploy_init.ps1.
+    ["0_context.template.md"]="${VERSION_DIR}/0_context.md"
     ["1_elicitation.template.md"]="${VERSION_DIR}/1_elicitation.md"
     ["2_architecture.template.md"]="${VERSION_DIR}/2_architecture.md"
     ["2_5_discussion.template.md"]="${VERSION_DIR}/2_5_discussion.md"

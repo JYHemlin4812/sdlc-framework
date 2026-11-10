@@ -7,6 +7,7 @@ so no clock injection is needed.
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -398,7 +399,7 @@ def test_5_13_angle_brackets_in_code_block_are_not_placeholders(tmp_path, capsys
 def test_5_14_wrapper_reports_fail_for_untouched_templates(tmp_path):
     project = make_project(tmp_path / "p", "standard", fill=False, chain="strict")
     result = subprocess.run(
-        [_pwsh(), "-NoProfile", "-File", str(PS1), "-Json", "-ProjectRoot", str(project)],
+        [_pwsh(), "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(PS1), "-Json", "-ProjectRoot", str(project)],
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -413,7 +414,7 @@ def test_5_14_wrapper_reports_fail_for_untouched_templates(tmp_path):
 
 def _run_wrapper(project: Path) -> dict:
     result = subprocess.run(
-        [_pwsh(), "-NoProfile", "-File", str(PS1), "-Json", "-ProjectRoot", str(project)],
+        [_pwsh(), "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(PS1), "-Json", "-ProjectRoot", str(project)],
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -495,7 +496,7 @@ def test_5_27_real_template_line_outside_a_fence_is_a_placeholder(tmp_path, caps
 
 def _wrapper(project: Path, *extra: str) -> dict:
     result = subprocess.run(
-        [_pwsh(), "-NoProfile", "-File", str(PS1), "-Json", "-ProjectRoot", str(project), *extra],
+        [_pwsh(), "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(PS1), "-Json", "-ProjectRoot", str(project), *extra],
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -728,3 +729,246 @@ def test_5_30_multiline_template_placeholder_span_is_detected(tmp_path, capsys):
     out = capsys.readouterr().out
     assert code == 1, out
     assert "placeholder" in out.lower(), out
+
+
+# --- IR-004: a date inside a code block is an example, never the HANDOFF date ---
+
+
+def _handoff_dir(tmp_path, handoff_text):
+    sdlc_dir = tmp_path / "SDLC_PM"
+    sdlc_dir.mkdir()
+    (sdlc_dir / "HANDOFF.md").write_text(handoff_text, encoding="utf-8")
+    (sdlc_dir / "RESUME.md").write_text("# RESUME\n\nBootstrap: python app.py\n", encoding="utf-8")
+    return sdlc_dir
+
+
+def test_ir004_date_only_in_code_block_is_not_a_last_updated_line(tmp_path):
+    """An example `**Last updated**` inside a fence does not satisfy the check."""
+    sdlc_dir = _handoff_dir(
+        tmp_path,
+        "# HANDOFF\n\n```markdown\n- **Last updated** : 2026-11-10 by example\n```\n",
+    )
+    errors, warnings = [], []
+    check_sdlc.check_handoff(sdlc_dir, date(2026, 11, 10), errors, warnings)
+    assert any("no readable" in e for e in errors), errors
+
+
+def test_ir004_example_date_in_code_block_does_not_drive_the_age(tmp_path):
+    """The real metadata line decides the age; an example date above it is ignored."""
+    sdlc_dir = _handoff_dir(
+        tmp_path,
+        "# HANDOFF\n\n```markdown\n- **Last updated** : 2026-11-10 by example\n```\n\n"
+        "- **Last updated** : 2020-01-01 by real author\n",
+    )
+    errors, warnings = [], []
+    check_sdlc.check_handoff(sdlc_dir, date(2026, 11, 10), errors, warnings)
+    assert errors == [], errors
+    assert any("days ago" in w for w in warnings), warnings
+
+
+# --- Mathilde 2.1: an unreadable file is a ❌ line, never a traceback ---------
+
+INVALID_UTF8 = b"# Title\n\n\xff\xfe broken bytes\n"
+
+
+@pytest.mark.parametrize(
+    "relative",
+    [
+        "SDLC_PM/HANDOFF.md",
+        "SDLC_PM/RESUME.md",
+        "SDLC_PM/v1.0.0/1_elicitation.md",
+        "SDLC_PM/v1.0.0/4_tests.md",
+    ],
+)
+def test_m21_invalid_utf8_document_is_an_error_line(tmp_path, capsys, relative):
+    project = make_project(tmp_path / "p", "standard", chain="strict")
+    (project / relative).write_bytes(INVALID_UTF8)
+    code = check_sdlc.check_traceability(project, phase="release")
+    out = capsys.readouterr().out
+    assert code == 1, out
+    name = relative.rsplit("/", 1)[-1]
+    assert f"❌ {name} is not valid UTF-8" in out, out
+
+
+def test_m21_invalid_utf8_config_exits_2(tmp_path, capsys):
+    project = make_project(tmp_path / "p", "minimal", chain="none")
+    (project / "SDLC_PM" / "sdlc-config.json").write_bytes(b'{"version": "4.0", "x": "\xff"}')
+    code = check_sdlc.check_traceability(project)
+    out = capsys.readouterr().out
+    assert code == 2, out
+    assert "not valid UTF-8" in out, out
+
+
+def test_m21_config_with_utf8_bom_is_accepted(tmp_path, capsys):
+    """Windows PowerShell 5.1 writes a BOM with -Encoding UTF8: the config must still load."""
+    project = make_project(tmp_path / "p", "minimal", chain="none")
+    config = project / "SDLC_PM" / "sdlc-config.json"
+    config.write_bytes(b"\xef\xbb\xbf" + config.read_bytes())
+    code = check_sdlc.check_traceability(project)
+    out = capsys.readouterr().out
+    assert code == 0, out
+
+
+# --- Bootstrap scripts: same templates, config without BOM -----------------
+
+
+def _template_sources(script: Path) -> set[str]:
+    return set(re.findall(r"[\w.]+\.(?:template\.md|example\.json)", script.read_text(encoding="utf-8")))
+
+
+def test_deploy_init_scripts_copy_the_same_templates():
+    """deploy_init.sh and deploy_init.ps1 bootstrap the same files (0_context.md included)."""
+    sh = _template_sources(SCRIPTS_DIR / "deploy_init.sh")
+    ps1 = _template_sources(SCRIPTS_DIR / "deploy_init.ps1")
+    assert "0_context.template.md" in ps1
+    assert sh == ps1, {"only_sh": sorted(sh - ps1), "only_ps1": sorted(ps1 - sh)}
+
+
+@pytest.mark.skipif(not shutil.which("powershell"), reason="Windows PowerShell 5.1 not installed")
+def test_deploy_init_ps1_on_windows_powershell_writes_config_without_bom(tmp_path):
+    """Windows PowerShell 5.1 `Set-Content -Encoding UTF8` adds a BOM; the bootstrap must not."""
+    project = tmp_path / "demo-project"
+    project.mkdir()
+    result = subprocess.run(
+        [shutil.which("powershell") or "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
+         str(SCRIPTS_DIR / "deploy_init.ps1"), "-ProjectRoot", str(project)],
+        capture_output=True, text=True, encoding="utf-8", errors="replace", check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    raw = (project / "SDLC_PM" / "sdlc-config.json").read_bytes()
+    assert not raw.startswith(b"\xef\xbb\xbf"), raw[:20]
+    assert json.loads(raw.decode("utf-8"))["project_name"] == "demo-project"
+
+
+# --- AQ-REV-101: closing fences use the opening character only --------------
+
+
+def test_strip_fences_mixed_marker_line_does_not_close_the_block():
+    text = "before\n```markdown\n```~\nP999:E001 example\n```\nafter\n"
+    stripped = check_sdlc.strip_fences(text)
+    assert "P999" not in stripped and "```" not in stripped, stripped
+    assert stripped.startswith("before\n") and stripped.endswith("after\n"), stripped
+
+
+def test_handoff_date_after_mixed_marker_line_is_still_an_example(tmp_path):
+    sdlc_dir = _handoff_dir(
+        tmp_path,
+        "# HANDOFF\n\n```markdown\n```~\n- **Last updated** : 2026-11-10 by example\n```\n",
+    )
+    errors, warnings = [], []
+    check_sdlc.check_handoff(sdlc_dir, date(2026, 11, 10), errors, warnings)
+    assert any("no readable" in e for e in errors), errors
+
+
+def test_fence_rule_is_the_same_in_gate_and_wave_planner():
+    """One rule in two modules (observation 0014): both parsers must use the same fence pattern."""
+    sys.path.insert(0, str(SCRIPTS_DIR.parent.parent / "sdlc-wave-orchestrator" / "scripts"))
+    import wave_planner  # noqa: E402
+
+    assert wave_planner.FENCE_RE.pattern == check_sdlc.CODE_FENCE.pattern
+    assert wave_planner.FENCE_RE.flags == check_sdlc.CODE_FENCE.flags
+
+
+def test_inline_triple_backticks_do_not_hide_an_orphan_task(tmp_path, capsys):
+    """Inspection AQ-REV-201: ```sample``` is inline code; the orphan P### after it is still checked."""
+    project = make_project(tmp_path / "p", "standard", chain="standard")
+    conception = project / "SDLC_PM" / "v1.0.0" / "3_conception.md"
+    conception.write_text(
+        FILLED_CONCEPTION_E_ONLY
+        + "\n```sample``` is inline code.\n\n#### P002:E999 — Orphan task\n- **wave** : 1\n",
+        encoding="utf-8",
+    )
+    code = check_sdlc.check_traceability(project, phase="plan")
+    out = capsys.readouterr().out
+    assert code == 1, out
+    assert "P002" in out, out
+
+
+# --- Fence rule checked against a CommonMark parser (observation 0007) --------
+
+FENCE_CORPUS = [
+    "a\n```\nP999:E001\n```\nb\n",
+    "a\n~~~\nP999:E001\n~~~\nb\n",
+    "a\n````\n```\nP999:E001\n````\nb\n",          # a shorter fence does not close
+    "a\n```markdown\n```~\nP999:E001\n```\nb\n",     # mixed characters do not close
+    "a\n```sample```\nb\n",                          # inline code, not a fence
+    "a\n~~~ info with ``` backticks\nx\n~~~\nb\n",   # tilde info may hold backticks
+    "a\n```\nunclosed\nP999:E001\n",                 # unclosed: runs to the end
+    "a\n   ```\nindented 3\n   ```\nb\n",            # up to 3 spaces of indentation
+    "a\n```\nx\n``` not a closer\ny\n```\nb\n",      # a closer carries no info string
+    "a\n```\nx\n```   \nb\n",                        # trailing spaces after the closer
+    "a\n``\nnot a fence\n``\nb\n",                   # two backticks are not a fence
+]
+
+
+def _fenced_lines_by_gate(text: str) -> set[int]:
+    lines: set[int] = set()
+    for m in check_sdlc.CODE_FENCE.finditer(text):
+        first = text.count("\n", 0, m.start())
+        last = text.count("\n", 0, m.end())
+        if m.end() > 0 and text[m.end() - 1] == "\n":
+            last -= 1
+        lines.update(range(first, last + 1))
+    return lines
+
+
+@pytest.mark.parametrize("text", FENCE_CORPUS)
+def test_fence_rule_agrees_with_commonmark(text):
+    """The hand-written fence pattern must mark exactly the lines a CommonMark parser fences.
+
+    Limitation: fences nested in block quotes or lists are not modelled (none in SDLC templates).
+    """
+    markdown_it = pytest.importorskip("markdown_it")
+    expected: set[int] = set()
+    for token in markdown_it.MarkdownIt("commonmark").parse(text):
+        if token.type == "fence" and token.map:
+            expected.update(range(token.map[0], token.map[1]))
+    assert _fenced_lines_by_gate(text) == expected
+
+
+# --- Inspection 17: values are read on their own line --------------------------
+
+
+def test_empty_depends_on_creates_no_false_cycle(tmp_path, capsys):
+    """AQ-EDGE-001: an empty Depends on, a fence, then prose citing P002 is not a dependency."""
+    project = make_project(tmp_path / "p", "standard", chain="standard")
+    (project / "SDLC_PM" / "v1.0.0" / "3_conception.md").write_text(
+        "# 3 — Conception\n\n#### P001:E001 — Producer\n- **wave** : 1\n- **Depends on** :\n\n"
+        "```text\nexample\n```\nP002 consumes this output.\n\n"
+        "#### P002:E001 — Consumer\n- **wave** : 2\n- **Depends on** : P001\n",
+        encoding="utf-8",
+    )
+    code = check_sdlc.check_traceability(project, phase="plan")
+    out = capsys.readouterr().out
+    assert code == 0, out
+
+
+@pytest.mark.parametrize(
+    "value, readable",
+    [
+        ("TBD (example: 2026-11-10)", False),
+        ("", False),
+        ("`2026-11-10 10:30` by `Alice`", True),
+        ("2026-11-10 by tester", True),
+    ],
+)
+def test_last_updated_date_must_start_the_value(tmp_path, value, readable):
+    """AQ-EDGE-002: the date is the value itself, not any date found later in the line."""
+    sdlc_dir = _handoff_dir(tmp_path, f"# HANDOFF\n\n- **Last updated** : {value}\n\nNext: 2026-11-09\n")
+    errors, warnings = [], []
+    check_sdlc.check_handoff(sdlc_dir, date(2026, 11, 10), errors, warnings)
+    assert (not any("no readable" in e for e in errors)) == readable, errors
+
+
+@pytest.mark.skipif(not shutil.which("powershell"), reason="Windows PowerShell 5.1 not installed")
+def test_wrapper_on_windows_powershell_reports_python_errors_as_json(tmp_path):
+    """AQ-EDGE-003: stderr from Python must not abort the 5.1 wrapper before its JSON."""
+    project = make_project(tmp_path / "p", "none", chain="none")
+    result = subprocess.run(
+        [shutil.which("powershell") or "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass",
+         "-File", str(PS1), "-Json", "-ProjectRoot", str(project), "-Today", "invalid"],
+        capture_output=True, text=True, encoding="utf-8", errors="replace", check=False,
+    )
+    data = json.loads(result.stdout)
+    assert data["status"] == "ERROR" and data["exitCode"] == 2, data
+    assert result.returncode == 2, result.stdout + result.stderr

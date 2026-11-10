@@ -66,10 +66,14 @@ $prevLocation = Get-Location
 try {
     Set-Location $ProjectRoot
     $pyArgs = @("--phase", $Phase)
-if ($Today) { $pyArgs += @("--today", $Today) }
-$output = & $pythonCmd $pyScript @pyArgs 2>&1
+    if ($Today) { $pyArgs += @("--today", $Today) }
+    # Windows PowerShell 5.1 turns native stderr into error records; with "Stop" the first one
+    # would abort the script before the JSON response is built (AQ-EDGE-003).
+    $ErrorActionPreference = "Continue"
+    $output = @(& $pythonCmd $pyScript @pyArgs 2>&1 | ForEach-Object { "$_" })
     $exitCode = $LASTEXITCODE
 } finally {
+    $ErrorActionPreference = "Stop"
     Set-Location $prevLocation
 }
 

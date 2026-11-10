@@ -86,7 +86,12 @@ if (Test-Path $configPath) {
     if ($projectSlug) {
         $cfg = Get-Content -Path $configPath -Raw -Encoding UTF8 | ConvertFrom-Json
         $cfg.project_name = $projectSlug
-        $cfg | ConvertTo-Json -Depth 6 | Set-Content -Path $configPath -Encoding UTF8
+        # No BOM: Windows PowerShell 5.1 `Set-Content -Encoding UTF8` writes one, and strict JSON
+        # readers reject it. .NET resolves relative paths against the process directory, so pass
+        # the provider path.
+        $json = $cfg | ConvertTo-Json -Depth 6
+        $fullPath = (Resolve-Path -LiteralPath $configPath).ProviderPath
+        [System.IO.File]::WriteAllText($fullPath, $json + "`n", (New-Object System.Text.UTF8Encoding($false)))
         Write-Output "Patched: sdlc-config.json project_name = '$projectSlug'"
     }
 }

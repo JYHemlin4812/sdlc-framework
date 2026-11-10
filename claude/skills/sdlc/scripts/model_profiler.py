@@ -97,14 +97,14 @@ def escalate(model: str, allowed: bool = True) -> str:
 
 
 def cmd_resolve(args: argparse.Namespace) -> int:
-    config = json.loads(Path(args.config).read_text(encoding="utf-8")) if args.config else {}
+    config = json.loads(Path(args.config).read_text(encoding="utf-8-sig")) if args.config else {}  # tolerate a BOM
     model = resolve_model(args.agent, config, session_model=args.session_model)
     print(json.dumps({"agent": args.agent, "model": model, "profile": config.get("model_profile", "balanced")}, ensure_ascii=False))
     return 0
 
 
 def cmd_escalate(args: argparse.Namespace) -> int:
-    config = json.loads(Path(args.config).read_text(encoding="utf-8")) if args.config else {}
+    config = json.loads(Path(args.config).read_text(encoding="utf-8-sig")) if args.config else {}  # tolerate a BOM
     allowed = bool(config.get("soft_failure_escalation", True)) if config else True
     new_model = escalate(args.from_model, allowed=allowed)
     print(json.dumps({"from": args.from_model, "to": new_model, "escalated": new_model != args.from_model}, ensure_ascii=False))

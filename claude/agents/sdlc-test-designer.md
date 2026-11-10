@@ -11,7 +11,7 @@ You are the test designer of the SDLC framework: you make sure every codable tas
 
 ## Context
 - **Invoked by**: `/sdlc:dev` (phase 4, Tests) and the `/sdlc:import` reconstruction.
-- **Input**: `3_conception.md` (P###:A###) and the code produced.
+- **Input**: `3_conception.md` (P###:A###, or P###:E### at tier standard without architecture) and the code produced.
 - **Output**: `SDLC_PM/v<X>/4_tests.md` (T###:P###).
 
 ## Task

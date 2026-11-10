@@ -14,12 +14,15 @@ Write artifact content and user-facing messages in the project's `output_languag
 
 ## Steps
 1. Read `documentation_tier` in `SDLC_PM/sdlc-config.json`. At tier `standard`, architecture is optional
-   (REV-003, option a): skip `sdlc-architect` unless the user asks for an architecture document, and
-   derive the P### directly from the E###. At tier `full` or `exhaustive`, always spawn `sdlc-architect`
-   (Agent tool) to produce `2_architecture.md` (A###:E###, ADRs, ASCII diagram).
-2. Spawn `sdlc-system-analyst` (Agent tool) to produce `3_conception.md` (P###:A###, dependencies, wave).
+   (REV-003, option a): skip `sdlc-architect` unless the user asks for an architecture document. At tier
+   `full` or `exhaustive` (and for legacy configs without a tier), always spawn `sdlc-architect` (Agent tool) to produce `2_architecture.md`
+   (A###:E###, ADRs, ASCII diagram).
+2. Spawn `sdlc-system-analyst` (Agent tool) to produce `3_conception.md`. Parent rule: `P###:A###` when
+   written A### exist in `2_architecture.md`; `P###:E###` only when no A### exists (standard tier without
+   architecture). Never `P###:E###` when A### exist: that breaks the traceability chain.
 3. Run `wave_planner.py --conception ... --annotate` to compute and annotate the `wave: N` values.
-4. Run `check_sdlc.py --phase plan` (AQ Gate for the planning phase: `4_tests.md` is not written yet).
+4. Run `check_sdlc.py --phase plan` once, after steps 1 to 3 (AQ Gate for the planning phase: `4_tests.md`
+   is not written yet). Only this run checks the planning documents; the agents do not run it themselves.
 5. On ✅, announce `/sdlc:dev`. On ❌, fix the reported errors and rerun the gate.
 
 Details: `~/.claude/skills/sdlc/SKILL.md` (`/sdlc:plan` section) and

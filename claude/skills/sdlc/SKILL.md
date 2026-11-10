@@ -290,8 +290,9 @@ explicit recommendation. `2_5_discussion.md` feeds the A### of phase 2 directly.
 1. Read `1_elicitation.md` (and `2_5_discussion.md` if present).
 2. Produce `2_architecture.md`: for each MUST/SHOULD E###, at least one `A###:E###` with an ADR
    (context, decision, consequences). At tier `standard`, architecture is optional (REV-003): skip
-   it unless asked, and derive the P### from the E### (`P###:E###`).
-3. Produce `3_conception.md`: break each A### into P###:A### (or each E### into P###:E### when no A### exists) with:
+   it unless asked.
+3. Produce `3_conception.md`: break each A### into P###:A### when written A### exist; use P###:E### only
+   when no A### exists (standard tier without architecture). Never P###:E### when A### exist. Each P### carries:
    - an initial `**wave**` field (`wave_planner.py` may recompute it)
    - a `**Depends on**` field listing prerequisite P###
    - a `**Target files**` field (declared write-set)

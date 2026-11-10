@@ -51,15 +51,20 @@ See `references/discussion-phase.md`. Optional.
 **Output**: `2_architecture.md` + `3_conception.md`
 **Precondition**: `1_elicitation.md` ✅ (and `2_5_discussion.md` if present)
 
-**Workflow**:
-1. Spawn `sdlc-architect` (Agent tool, model resolved from the profile):
-   - Input: `1_elicitation.md` + `2_5_discussion.md` (if present)
-   - Output: `2_architecture.md` (A###:E### + ADR + ASCII diagram)
+**Workflow** (tier from `documentation_tier` in `sdlc-config.json`):
+1. Architecture:
+   - Tier `full` / `exhaustive` (and legacy configs without a tier): spawn `sdlc-architect` (Agent
+     tool, model resolved from the profile). Input: `1_elicitation.md` + `2_5_discussion.md` (if
+     present). Output: `2_architecture.md` (A###:E### + ADR + ASCII diagram).
+   - Tier `standard`: skip the architect unless the user asks for an architecture document.
 2. Spawn `sdlc-system-analyst` (Agent tool):
-   - Input: `2_architecture.md`
-   - Output: `3_conception.md` (P###:A### with `**Depends on**`, `**Target files**`, `**Status**`)
+   - Input: `2_architecture.md` when written A### exist; otherwise `1_elicitation.md` (standard
+     tier without architecture)
+   - Output: `3_conception.md` with `**Depends on**`, `**Target files**`, `**Status**`. Parent:
+     `P###:A###` when written A### exist, `P###:E###` only when none exists.
 3. Run `wave_planner.py --conception ... --annotate` to compute/annotate the `**wave**` fields
-4. Run `check_sdlc.py --phase plan` (AQ Gate for planning; `4_tests.md` is not written yet)
+4. Run `check_sdlc.py --phase plan` once, here (AQ Gate for planning; `4_tests.md` is not written
+   yet). The agents do not run it themselves.
 5. On ✅: announce `/sdlc:dev`. On ❌: fix and rerun.
 
 ---
@@ -80,7 +85,8 @@ Asks for `output_language` (default: the language the user writes in) and
 
 **Phase**: 3+4 (Implementation + tests)
 **Output**: code + commits + updated `4_tests.md`
-**Precondition**: AQ Gate ✅ on `2_architecture.md` + `3_conception.md`
+**Precondition**: `check_sdlc.py --phase plan` ✅ on the planning documents (`2_architecture.md`
+when written, `3_conception.md`)
 
 **Workflow** (details in the `SKILL.md` section):
 

@@ -494,7 +494,8 @@ def check_tasks_under_pending_replacement(current_v: Path, errors: list[str]) ->
 SUPERSEDED_STATUS = re.compile(
     r"^[ \t]*[-*][ \t]*\*\*Status\*\*[ \t]*:[ \t]*(?:↪[ \t]*)?Superseded by A\d{3}", re.MULTILINE
 )
-DONE_STATUS = re.compile(r"^[ \t]*[-*][ \t]*\*\*(?:Status|Statut)\*\*[ \t]*:[ \t]*✅", re.MULTILINE)
+# Done = ✅, or the short code [D] that workflow-states.md allows where emoji are not rendered (R04).
+DONE_STATUS = re.compile(r"^[ \t]*[-*][ \t]*\*\*(?:Status|Statut)\*\*[ \t]*:[ \t]*(?:✅|\[D\])", re.MULTILINE)
 
 
 def check_superseded_tasks(current_v: Path, errors: list[str]) -> None:
@@ -688,7 +689,14 @@ def check_traceability(
         check_chain(current_v, tier, errors, phase=phase)
         # The decision checks reread A and P. An undecodable file already has its ❌ line from
         # check_chain, so they are skipped instead of raising a traceback (SDLC-BPSE-003).
-        if all(_decodes(current_v / CHAIN_FILES[k]) for k in ("A", "P")):
+        # At standard, an untouched architecture skeleton was never authored: its example A### are not
+        # decisions in force (SDLC-BPSE-RV-04, same exclusion as check_chain).
+        arch_path = current_v / CHAIN_FILES["A"]
+        arch_unauthored = (
+            tier == "standard" and arch_path.exists()
+            and _is_unauthored_skeleton(read_text(arch_path), "2_architecture")
+        )
+        if all(_decodes(current_v / CHAIN_FILES[k]) for k in ("A", "P")) and not arch_unauthored:
             check_decision_statuses(current_v, warnings)
             check_superseded_tasks(current_v, errors)
             check_tasks_under_pending_replacement(current_v, errors)

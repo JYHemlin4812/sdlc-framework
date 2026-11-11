@@ -636,7 +636,7 @@ BUNDLE_TEMPLATES = ASSETS.parent.parent.parent.parent / "bundle" / "templates" /
 
 @pytest.mark.parametrize(
     "name",
-    ["1_elicitation", "2_5_discussion", "2_architecture", "3_conception", "4_tests"],
+    ["1_elicitation", "2_5_discussion", "2_architecture", "3_conception", "4_tests", "5_delivery"],
 )
 def test_5_39_bundle_template_copy_equals_reference_template(name):
     """Plan task 5.4: the copies shipped in bundle/ must not drift from the reference templates."""
@@ -1176,6 +1176,37 @@ def test_unfinished_task_of_a_superseded_decision_blocks_the_plan_gate(tmp_path,
     out = capsys.readouterr().out
     assert code == 1, out
     assert "P001" in out and "A001" in out and "superseded" in out.lower(), out
+
+
+def test_completed_historical_task_with_short_code_done_is_kept_as_history(tmp_path, capsys):
+    """Inspection BPSE 6, R04: '[D] = DONE' (workflow-states.md) keeps a superseded task valid."""
+    project = make_project(tmp_path / "p", "full", asvs=1, chain="strict")
+    vdir = project / "SDLC_PM" / "v1.0.0"
+    (vdir / "2_architecture.md").write_text(
+        FILLED_ARCHITECTURE + "- **Status** : ↪ Superseded by A002\n"
+        "\n### A002:E001 — Stream rows\n- **Decision** : Stream.\n- **Covers** : E001\n"
+        "- **Status** : ✅ Accepted\n- **Supersedes** : A001, effective 2026-11-10\n",
+        encoding="utf-8",
+    )
+    (vdir / "3_conception.md").write_text(
+        FILLED_CONCEPTION_WITH_A + "- **Status** : [D]\n"
+        "\n#### P002:A002 — Stream the reader\n- **wave** : 1\n- **Depends on** : none\n"
+        "- **Status** : ⬜\n",
+        encoding="utf-8",
+    )
+    code = check_sdlc.check_traceability(project, phase="plan")
+    out = capsys.readouterr().out
+    assert code == 0, out
+
+
+def test_untouched_architecture_skeleton_at_standard_declares_no_decision(tmp_path, capsys):
+    """SDLC-BPSE-RV-04: an untouched shipped 2_architecture skeleton is not a decision in force."""
+    project = make_project(tmp_path / "p", "standard", chain="standard", fill=True)
+    vdir = project / "SDLC_PM" / "v1.0.0"
+    shutil.copy(SHIPPED_SKELETONS / "63b5a4c" / "2_architecture.template.md", vdir / "2_architecture.md")
+    check_sdlc.check_traceability(project, phase="plan")
+    out = capsys.readouterr().out
+    assert "is in force but no P### implements it yet" not in out, out
 
 
 # --- Inspection SDLC-REV-005: bootstrap by documentation tier ---------------------------------

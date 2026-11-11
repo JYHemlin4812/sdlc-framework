@@ -156,6 +156,13 @@ Which option?
 
 ### Step 5: Execute the choice
 
+Before options 1 and 2 (merge or PR), when `SDLC_PM/v<X>/5_delivery.md` exists:
+commit it on the feature branch, with the other `SDLC_PM/` tracking files that
+are still uncommitted, so the history carries the delivery document. This is a
+documentation-only commit: it does not change **Prepared at commit**, so it does
+not make the evidence stale (SDLC-BPSE-R02). Option 3 (keep) and option 4
+(discard) do not need it.
+
 #### Option 1: Merge locally
 
 ```bash

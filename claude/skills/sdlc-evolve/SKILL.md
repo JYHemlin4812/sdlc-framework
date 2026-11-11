@@ -28,9 +28,12 @@ description: |
   dev subagents receive a single doctrine.
 - **Place in the pipeline**: between writing the P### (`3_conception.md`)
   and implementing it. The T### are written before the code.
-- **Expected deliverable**: for each P###, at least one T### that fails
-  (red) before the production code and passes (green) after. Record it in
-  `4_tests.md`, "initial state" → "final state" column.
+- **Expected deliverable**: for each P### that adds new behavior, at least one
+  T### that fails (red) before the production code and passes (green) after.
+  A characterization test (pinning existing behavior before a refactor) or a
+  written-after test (declared, with the user's agreement) is the documented
+  exception: record its RED status as such. Record every T### in `4_tests.md`,
+  "initial state" → "final state" column.
 
 > **Proxy status** — adapted from `test-driven-development`
 > ([obra/superpowers](https://github.com/obra/superpowers)) because no

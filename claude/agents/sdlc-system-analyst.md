@@ -34,9 +34,11 @@ You are the system analyst of the SDLC framework: you turn an architecture (or, 
   through its A###. Generate P### only for decisions in force: a **Superseded** or **Rejected** A### keeps its
   link and its finished (✅) P### as history, but gets no new task; its replacement's P### start from the effective date it states.
   Every unfinished P### of a superseded or rejected A### is retired from `3_conception.md` or re-parented (to the replacing A###, or to a decision in force);
-  the planning gate fails while one remains, so obsolete work never reaches `/sdlc:dev`. When you retire one, also
-  remove it from the summary table and from every **Depends on** that cites it, and list the retired P### in your
-  recap: `/sdlc:plan` then removes their T### from `4_tests.md` and updates `STATE.md` (you write only `3_conception.md`).
+  the planning gate fails while one remains, so obsolete work never reaches `/sdlc:dev`. Before you remove a retired
+  P### from a **Depends on** that cites it, decide that edge: redirect it to the replacement producer (the P### that
+  now provides the output), retire the consumer too, or confirm the prerequisite is unnecessary. Dropping the edge
+  alone can put a consumer in the same wave as its new producer (SDLC-BPSE-R01). Then remove the retired P### from the
+  summary table, and list it in your recap: `/sdlc:plan` then removes their T### from `4_tests.md` and updates `STATE.md` (you write only `3_conception.md`).
 - No P### depends on a P### of the same or a later wave, and no P### presupposes a file or output that no earlier P### produces, so the DAG stays acyclic and each wave can run.
 - Make every P### actionable: no "TODO", "TBD" or vague title. If a task cannot be described precisely, split it or flag the missing upstream requirement.
 - Fill **Target files** for every P###: it drives Code Lock and lets the wave planner detect write conflicts within a wave.

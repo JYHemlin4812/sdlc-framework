@@ -47,20 +47,39 @@ if hasattr(sys.stderr, "reconfigure"):
 
 
 SECTION_RE = re.compile(r"^####\s+(P\d{3})", re.MULTILINE)
-DEPENDS_RE = re.compile(r"\*\*(?:Depends on|D[ée]pend de)\*\*\s*:\s*([^\n]+)", re.IGNORECASE)
-FILES_RE = re.compile(r"\*\*(?:Target files|Fichiers cibles)\*\*\s*:\s*([^\n]+)", re.IGNORECASE)
-WAVE_LINE_RE = re.compile(r"^(\s*[-*]\s*\*\*wave\*\*\s*:\s*)\d+", re.MULTILINE)
+# Same line only: `\s` would let an empty value read the next lines (AQ-EDGE-001).
+DEPENDS_RE = re.compile(r"\*\*(?:Depends on|D[ée]pend de)\*\*[ \t]*:[ \t]*([^\n]*)", re.IGNORECASE)
+FILES_RE = re.compile(r"\*\*(?:Target files|Fichiers cibles)\*\*[ \t]*:[ \t]*([^\n]*)", re.IGNORECASE)
+# Horizontal whitespace only: `\s` would cross line breaks (and a masked code block) (AQG-101).
+WAVE_LINE_RE = re.compile(r"^([ \t]*[-*][ \t]*\*\*wave\*\*[ \t]*:[ \t]*)\d+", re.MULTILINE)
 PID_RE = re.compile(r"\bP\d{3}\b")
 
 # Write-set values treated as "not declared" (the linter stays silent).
 # French values are kept for legacy design files.
 _EMPTY_FILE_TOKENS = {"none", "aucun", "aucune", "—", "-", "n/a", "na"}
 
+# Fenced code blocks (``` or ~~~) hold examples, never tasks (IR-001). Same pattern as
+# check_sdlc.CODE_FENCE, pinned by a test in sdlc/tests: a closing fence repeats the opening
+# character only, so ```~ does not close ``` (AQ-REV-101).
+FENCE_RE = re.compile(
+    r"^[ \t]{0,3}(`{3,}(?=[^`\n]*$)|~{3,})([^\n]*)\n(.*?)(?:^[ \t]{0,3}\1(?:(?<=`)`*|(?<=~)~*)[ \t]*$|\Z)",
+    re.DOTALL | re.MULTILINE,
+)
+
+
+def mask_code(content: str) -> str:
+    """Blank every fenced code block, keeping offsets and line breaks.
+
+    Parsing runs on the masked text, so an example `#### P999` or `**Depends on**`
+    inside a block is never read; positions still map back to the original text.
+    """
+    return FENCE_RE.sub(lambda m: re.sub(r"[^\n]", " ", m.group(0)), content)
+
 
 def parse_dag(content: str) -> dict[str, set[str]]:
     """Return {pid: set_of_parent_pids}."""
     deps: dict[str, set[str]] = {}
-    sections = SECTION_RE.split(content)
+    sections = SECTION_RE.split(mask_code(content))
     for i in range(1, len(sections), 2):
         pid = sections[i]
         body = sections[i + 1] if i + 1 < len(sections) else ""
@@ -87,7 +106,7 @@ def parse_write_sets(content: str) -> dict[str, set[str]]:
     cross-platform comparison; case is preserved.
     """
     write_sets: dict[str, set[str]] = {}
-    sections = SECTION_RE.split(content)
+    sections = SECTION_RE.split(mask_code(content))
     for i in range(1, len(sections), 2):
         pid = sections[i]
         body = sections[i + 1] if i + 1 < len(sections) else ""
@@ -183,19 +202,31 @@ def annotate_file(path: Path, waves: list[list[str]]) -> None:
     """Rewrite the file, updating the `- **wave**: N` line of each P###."""
     pid_to_wave = {pid: i + 1 for i, layer in enumerate(waves) for pid in layer}
     content = path.read_text(encoding="utf-8")
-    sections = SECTION_RE.split(content)
-    rebuilt = [sections[0]]
-    for i in range(1, len(sections), 2):
-        pid = sections[i]
-        body = sections[i + 1] if i + 1 < len(sections) else ""
-        wave = pid_to_wave.get(pid)
+    masked = mask_code(content)  # sections are found outside code blocks only
+    headers = list(SECTION_RE.finditer(masked))
+    rebuilt: list[str] = []
+    pos = 0
+    for idx, header in enumerate(headers):
+        end = headers[idx + 1].start() if idx + 1 < len(headers) else len(content)
+        rebuilt.append(content[pos:header.start()])
+        rebuilt.append(content[header.start():header.end()])
+        body = content[header.end():end]
+        wave = pid_to_wave.get(header.group(1))
         if wave is not None:
-            new_body, count = WAVE_LINE_RE.subn(rf"\g<1>{wave}", body, count=1)
-            if count == 0:
-                new_body = f"\n- **wave** : {wave}{body}"
-            body = new_body
-        rebuilt.append(f"#### {pid}")
+            hit = WAVE_LINE_RE.search(masked[header.end():end])
+            if hit:
+                # Replace only the number, at its offsets in the original text (AQG-101).
+                body = body[:hit.end(1)] + str(wave) + body[hit.end():]
+            else:
+                # After the whole heading line, so `P001:A001 — Title` stays intact (AQ-REV-202).
+                eol = body.find("\n")
+                if eol == -1:
+                    body = f"{body}\n- **wave** : {wave}\n"
+                else:
+                    body = f"{body[:eol + 1]}- **wave** : {wave}\n{body[eol + 1:]}"
         rebuilt.append(body)
+        pos = end
+    rebuilt.append(content[pos:])
     path.write_text("".join(rebuilt), encoding="utf-8")
 
 

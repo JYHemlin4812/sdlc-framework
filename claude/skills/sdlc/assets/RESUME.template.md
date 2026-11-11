@@ -82,6 +82,11 @@ deliverable. No history. No vision. Only what is.>`
 
 If a step fails, see **Known pitfalls** in `HANDOFF.md`.
 
+> Keep these steps complete here: this file must work on its own, including at tier `minimal`
+> where no project README is created. When the project's README holds the same steps, add a
+> relative link to it (e.g. `../README.md`); never replace the steps with a link to a README
+> that does not exist.
+
 ---
 
 ## Useful commands
@@ -126,4 +131,5 @@ If a step fails, see **Known pitfalls** in `HANDOFF.md`.
 - `2_architecture.md` — architecture decisions (A### + ADR) — tier `full`+
 - `3_conception.md` — task breakdown (P### + waves)
 - `4_tests.md` — coverage (T###) — tier `full`+
+- `5_delivery.md` — CI, migrations, rollback, delivery evidence — tier `full`+
 - `references/` (SDLC skill) — structural rules

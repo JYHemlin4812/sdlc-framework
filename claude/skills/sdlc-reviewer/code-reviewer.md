@@ -58,10 +58,19 @@ Agent tool (general-purpose):
     - Integration tests where they matter?
     - Do the tests pass? (Run them if you can; say so if you could not.)
 
+    **Boundaries and contracts:**
+    - Inputs validated and invariants preserved?
+    - Public DTOs expose no private data (secrets, internal IDs, storage fields)?
+    - Technical errors not leaked to clients?
+    - External calls bounded (timeout, retries, failure handling)?
+    - Schemas and their consumers still consistent?
+
     **Production readiness:**
     - Migration strategy if a schema changed?
     - Backward compatibility considered?
     - Documentation updated where needed?
+
+    Adapt this list to the change; do not run a general security audit nobody asked for.
 
     ## Reporting
 
@@ -79,6 +88,8 @@ Agent tool (general-purpose):
     the plan itself rather than the implementation, say so.
 
     Base every finding on code you actually read, with a file:line reference.
+    Review the diff and the callers, contracts and tests it touches; a review does
+    not trigger a rewrite. Never invent a defect to fill a section.
 
     ## Output format
 
@@ -98,13 +109,21 @@ Agent tool (general-purpose):
 
     For each issue:
     - File:line reference
-    - What is wrong
-    - Why it matters
-    - How to fix it (if not obvious)
-    - Confidence (high / medium / low) when you are not certain
+    - What is wrong, and the condition that triggers it
+    - Why it matters (consequence)
+    - The minimal fix
+    - Certainty: **confirmed** (you showed it), **uncertain** (to verify, say how)
+      or **suggestion** (optional)
+    - Origin: **introduced** by this diff, or **pre-existing** (present before the
+      base commit)
 
     ### Recommendations
     [Improvements to code quality, architecture or process]
+
+    ### Limits of this review
+    [Tests you actually ran (command and result) or "none run"; files not read;
+    what this review cannot show. "No issue found" does not guarantee there is no
+    bug, and a local result does not prove remote CI.]
 
     ### Assessment
 
@@ -120,8 +139,10 @@ Agent tool (general-purpose):
 - `{BASE_SHA}` — starting commit
 - `{HEAD_SHA}` — ending commit
 
-**Reviewer returns:** Strengths, Issues (Critical / Important / Minor),
-Recommendations, Assessment. Triage is done by the caller (see `SKILL.md`,
+**Reviewer returns:** Strengths, Issues (Critical / Important / Minor, each
+marked confirmed / uncertain / suggestion and introduced / pre-existing),
+Recommendations, Limits of this review, Assessment. The two extra axes come
+from the BPSE `se-review` practice (see `sdlc/SOURCES.md`). Triage is done by the caller (see `SKILL.md`,
 step 3) and the findings are processed with `sdlc-receive-review`.
 
 ## Example output

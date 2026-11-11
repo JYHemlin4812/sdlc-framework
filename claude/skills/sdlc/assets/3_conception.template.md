@@ -5,7 +5,8 @@
 > English so the tooling can parse them.
 
 > SDLC phase 3. Breaks each A### into **codable** tasks identified as
-> **P###:A###**. The `wave: N` field (integer ≥ 1) enables parallel execution
+> **P###:A###** (at tier standard without any written A###: **P###:E###**).
+> The `wave: N` field (integer ≥ 1) enables parallel execution
 > by waves through `wave_planner.py`.
 
 ---
@@ -43,8 +44,9 @@
 - **Size** : `<S/M/L>` (S < 30 min, M < 2h, L < 1 day)
 - **Language** : `<python\|javascript\|typescript\|go\|rust>` (if multi-stack)
 - **Target files** : `<relative paths>` (declared write-set, comma-separated relative paths; feeds the intra-wave write-conflict linter in `wave_planner.py`)
+- **Fixes contract** : `<none, or the API/event/interface this P### defines; its consumers list this P### in Depends on>`
 - **Code Lock criteria** :
-  - No change allowed until this P### is ✅
+  - No change allowed until this P### is planned and its `--phase plan` gate passes (✅ is set after verification)
   - The associated T### must pass
 - **Status** : ⬜
 
@@ -118,11 +120,11 @@ subagent through the `Agent` tool (fresh context).
 
 ## Phase 3 checklist
 
-- [ ] Every P### has the form `P###:A###` (existing parent)
+- [ ] Every P### has the form `P###:A###` (existing parent), or `P###:E###` at tier standard when no A### is written
 - [ ] `wave: N` field present, integer ≥ 1
 - [ ] No cycle in the DAG (checked by `wave_planner.py`)
 - [ ] No `Depends on` pointing to a wave ≥ the current wave
-- [ ] AQ Gate: `check_sdlc.py` exit 0
+- [ ] AQ Gate: `check_sdlc.py --phase plan` exit 0
 
 > **Next**: `/sdlc:dev` starts the development loop (wave by wave with
 > parallel subagents); the validating T### are created in `4_tests.md`.

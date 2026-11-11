@@ -60,6 +60,7 @@ bash bundle/scripts/install.sh
 │   ├── sdlc-wave-orchestrator/     (DAG + Kahn + lockfile)
 │   ├── sdlc-lang-dispatcher/       (Python/JS/Go/Rust standards)
 │   ├── sdlc-asvs-auditor/          (OWASP ASVS L1/L2/L3)
+│   ├── sdlc-architecture/ sdlc-contract/ sdlc-delivery/   (adapted from BPSE)
 │   └── sdlc-debugger/ sdlc-evolve/ sdlc-finish/ sdlc-receive-review/ sdlc-reviewer/ sdlc-verify/
 ├── commands/
 │   └── sdlc/                       (18 slash commands)

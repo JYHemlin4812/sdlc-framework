@@ -18,9 +18,47 @@ Equivalent slash command: `/sdlc:gate`.
 
 | Code | Meaning | Action |
 |---|---|---|
-| 0 | PASS | Progression allowed |
-| 1 | FAIL | Traceability, wave or ASVS errors — fix before continuing |
-| 2 | ERROR | Invalid config, missing dependencies — diagnose |
+| 0 | PASS (or SKIPPED for tier `none`) | Progression allowed. SKIPPED means nothing was checked: it is never reported as PASS |
+| 1 | FAIL | Traceability, wave, placeholder or ASVS errors — fix before continuing |
+| 2 | ERROR | Invalid `sdlc-config.json` (JSON syntax). The PowerShell wrapper also exits 2 when Python or `check_sdlc.py` is missing |
+
+Warnings (lines starting with `⚠️`) do not change the exit code. The wrapper's JSON output lists them in `warnings`.
+Warnings: a HANDOFF older than 7 days; A### whose status is still `Proposed — auto-approve`
+(written under `--auto-approve`, not yet accepted by the user, with or without P###; see
+`auto-approve.md`); an A### in force with no P### yet; a replacing A### (`Supersedes`) still
+waiting for the user's acceptance, with no P### yet. Status lines inside code blocks are
+examples and are ignored.
+
+Decision errors:
+- A P### that hangs from an A### marked `Superseded by A###` or `Rejected` and is not ✅. Retire it
+  from `3_conception.md` or re-parent it; finished P### stay as history.
+- A P### that hangs from a replacing A### (`Supersedes`) still plainly `Proposed`: the decision it
+  replaces stays in force until the user accepts the replacement. A `Proposed` A### without
+  `Supersedes` is not judged (the status predates this rule, so older projects keep passing).
+- An accepted replacing A### with no P###: the replacement would never be built.
+
+## Checks by documentation tier
+
+The gate reads `documentation_tier` from `SDLC_PM/sdlc-config.json`.
+
+| Tier | Version folder | Checks |
+|---|---|---|
+| `none` | not required | Nothing. Reports SKIPPED, exit 0 |
+| `minimal` | not required | `HANDOFF.md` and `RESUME.md` exist and contain no unfilled placeholder. HANDOFF older than 7 days: warning |
+| `standard` | required | The minimal checks, plus E→P: `A###` and `T###` are optional. A `P###` may link to an `E###` when no `A###` is written |
+| `full` | required | The minimal checks, plus strict E→A→P→T, and `asvs_level >= 1` |
+| `exhaustive` | required | As `full`, and `asvs_level >= 2` |
+| absent or invalid | required | Strict E→A→P→T, as in earlier versions. No placeholder check (existing projects keep their verdict) |
+
+At every tier except `none` and absent, a template placeholder left unfilled is an error. A placeholder is a line of a document that is identical to a line of the shipped templates and contains `<...>`. Partly filled documents are therefore caught, and a legitimate value such as `<dialog>` is not. A placeholder that spans several lines (for example in `HANDOFF.template.md`) is detected line by line. Fenced code blocks (``` or ~~~, indented by up to three spaces) are examples and are not checked, with one exception: in `RESUME.md` and `HANDOFF.md`, command blocks (`bash`, `sh`, `shell`, `zsh`, `console`, `powershell`, `pwsh`, `cmd`, `bat`) hold required bootstrap steps and are checked like the rest of the document.
+
+### Phases
+
+`check_sdlc.py --phase plan` is the precondition of `/sdlc:dev`. It does not require `4_tests.md` yet: the tests are written during development. `--phase release` (the default) is the full check, run at the end of the waves and before a release.
+
+Version folders are compared by number: `v10.0.0` is newer than `v9.0.0`. Folders whose names do not match `vX.Y.Z` are ignored.
+
+Test coverage is not measured by the gate. `test_coverage_min` is a project target, shown as an indicator in the configuration schema.
 
 ## Checks performed (v3+, superset of v2)
 
@@ -29,7 +67,8 @@ Equivalent slash command: `/sdlc:gate`.
 1. `SDLC_PM/vX.X.X/` exists (the most recent one is checked)
 2. `1_elicitation.md` is not empty and contains ≥ 1 E###
 3. Every A### declares an existing parent E### (`A###:E###`)
-4. Every P### declares an existing parent A### (`P###:A###`)
+4. Every P### declares an existing parent A### (`P###:A###`); at tier `standard` with no A###
+   written, an existing parent E### (`P###:E###`)
 5. Every T### declares an existing parent P### (`T###:P###`)
 6. No duplicate ID anywhere
 7. No active blocker (`🚫` or `[B]` in the .md files)
@@ -118,13 +157,16 @@ and resolved.
 
 ## Pre-commit hook (optional)
 
-Suggested `.git/hooks/pre-commit`:
+Suggested `.git/hooks/pre-commit` for development commits. It runs the planning phase, so a commit
+for a finished task is not blocked by tests that later tasks have not written yet (inspection 9,
+AQG-001). The release gate (`-Phase release`, the default) must run before a merge or a release.
 
 ```bash
 #!/usr/bin/env bash
-pwsh skills/sdlc/scripts/check_sdlc.ps1 -Json > /tmp/aq.json
+pwsh skills/sdlc/scripts/check_sdlc.ps1 -Json -Phase plan > /tmp/aq.json
 status=$(python -c "import json; print(json.load(open('/tmp/aq.json'))['status'])")
-if [ "$status" != "PASS" ]; then
+# SKIPPED (tier none) lets the commit through; it is not a PASS and the report says so.
+if [ "$status" != "PASS" ] && [ "$status" != "SKIPPED" ]; then
   echo "❌ AQ Gate FAIL — commit refused"
   cat /tmp/aq.json
   exit 1

@@ -10,7 +10,7 @@ argument-hint: ""
 Before your first tool call, say in one sentence what you're about to do. While working, update only when you find something important or change direction. When you finish, lead with the outcome, then the next step.
 
 ## Steps
-1. Invoke the `sdlc-finish` sub-skill (Skill tool).
+1. Invoke the `sdlc-finish` sub-skill (Skill tool). Its step 0 checks the delivery: at tier `full` and above, `5_delivery.md` must exist and be filled, otherwise it runs `sdlc-delivery` first; below `full`, it runs the `sdlc-delivery` checklist. Preparing the delivery authorizes no merge, push or deployment.
 2. Run the test suite and quote the result; if anything fails, stop and handle it first.
 3. Detect the environment (regular repo or git worktree).
 4. Present the options: (a) local merge, (b) open a PR, (c) keep the branch, (d) discard.

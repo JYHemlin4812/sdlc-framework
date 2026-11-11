@@ -74,6 +74,10 @@ finds, with a severity. Triage happens here, not in the reviewer:
 - Critical: fix now.
 - Important: fix before moving to the next P### or wave.
 - Minor: record in the P### notes for later, or fix if trivial.
+- **Pre-existing** defects (present before `{BASE_SHA}`) block only when they sit
+  inside the scope of the change; otherwise record them for later. **Uncertain**
+  findings are verified (run the trigger condition) before any fix;
+  **suggestions** are optional.
 - If the reviewer is wrong, push back with technical reasoning (code or tests
   that show it works). See `sdlc-receive-review`.
 

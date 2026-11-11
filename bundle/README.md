@@ -30,7 +30,7 @@ bash bundle/scripts/install.sh
 ```
 
 The installer deploys the canonical content of `claude/` to `~/.claude/`:
-11 skills (`skills/sdlc*`), 19 slash commands (`commands/sdlc/`) and 12 agents
+14 skills (`skills/sdlc*`), 19 slash commands (`commands/sdlc/`) and 12 agents
 (`agents/sdlc-*`). It is idempotent (skipped when the checksum is unchanged), takes a
 timestamped backup before replacing any file, and refuses to overwrite a third-party skill
 of the same name. Full details: `INSTALL.md`.

@@ -105,7 +105,7 @@
       "minimum": 0,
       "maximum": 1,
       "default": 0.7,
-      "description": "Minimum test coverage required by the AQ Gate (0.7 = 70%)."
+      "description": "Target test coverage for the project (0.7 = 70%). Indicator only: the AQ Gate does not measure coverage."
     },
     "code_lock_enabled": {
       "type": "boolean",

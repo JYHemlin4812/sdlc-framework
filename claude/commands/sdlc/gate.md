@@ -14,7 +14,8 @@ Write the report and user-facing messages in the project's `output_language` (`S
    last gate needs fresh evidence from this session (tests/lint/build/`git status` run and quoted),
    not just an agent's report. Without evidence, set the P### back to 🔄 before continuing.
 1. Run `python ~/.claude/skills/sdlc/scripts/check_sdlc.py` from the current project.
-2. On exit 0: announce ✅ and recommend `/sdlc:report` or `/sdlc:dev`, depending on the phase.
+2. On exit 0 with status PASS: announce ✅ and recommend `/sdlc:report` or `/sdlc:dev`, depending on the phase.
+   On status SKIPPED (documentation_tier `none`): say that nothing was checked. Do not announce ✅.
 3. On exit 1: list the errors, suggest `/sdlc:fix <P###>` or a manual fix, and do not move to the
    next phase, because the E→A→P→T chain is broken.
 

@@ -62,7 +62,7 @@ Firm rules:
 - **Framework**: built-in (`#[cfg(test)] mod tests`)
 - **Integration tests**: `tests/` at the root
 - **Property-based**: `proptest` or `quickcheck` recommended for pure functions
-- **Coverage target**: 70% minimum
+- **Coverage target**: the project's `test_coverage_min` (default 70%), an indicator rather than a universal quota; never invent a threshold the project did not set
 
 ```rust
 #[cfg(test)]

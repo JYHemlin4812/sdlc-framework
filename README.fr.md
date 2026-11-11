@@ -83,9 +83,9 @@ jour), `-NoBackup`/`--no-backup` (pas de sauvegarde horodatée avant remplacemen
 /sdlc:brainstorm  → 1_elicitation.md (exigences E###)
 /sdlc:discuss     → 2_5_discussion.md (optionnel, projets M/L)
 /sdlc:plan        → 2_architecture.md (A###) + 3_conception.md (P### avec vagues)
-/sdlc:gate        → AQ Gate, exit 0 requis pour continuer
+check_sdlc.py --phase plan → porte de planification, exit 0 requis avant /sdlc:dev
 /sdlc:dev         → implémentation vague par vague + cas de test T### (--wave N, --auto-approve)
-/sdlc:gate        → puis /sdlc:report pour la livraison
+/sdlc:gate        → porte de release en fin de vagues (phase par défaut), puis /sdlc:report
 ```
 
 ## Structure du dépôt
@@ -105,7 +105,7 @@ sdlc-framework/
 
 | Catégorie | Nombre |
 |---|---|
-| Skills (`claude/skills/*/SKILL.md`) | 10 |
+| Skills (`claude/skills/*/SKILL.md`) | 14 |
 | Commandes (`claude/commands/sdlc/*.md`, `/sdlc:*`) | 18 |
 | Agents (`claude/agents/*.md`) | 12 |
 

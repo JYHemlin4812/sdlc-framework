@@ -157,7 +157,7 @@ try {
     Assert-True ($src -match "'commands'\) 'sdlc'")       "C0. commands source = top-level commands/sdlc"
 
     # =======================================================================
-    # (C1) real ref: DERIVED floors 11 / 12 / 19 (read-only, no writes)
+    # (C1) real ref: DERIVED floors 14 / 12 / 19 (read-only, no writes)
     # =======================================================================
     Write-Host "-- (C1) derived floors on the real ref (read-only) --" -ForegroundColor Cyan
     $realRef = Join-Path (Split-Path -Parent (Split-Path -Parent $scriptsDir)) 'claude'
@@ -167,12 +167,34 @@ try {
         $realCmd    = @($realGreen | Where-Object { $_ -like 'commands/sdlc/*' }).Count
         $realAgents = @($realGreen | Where-Object { $_ -like 'agents/*' }).Count
         $realCore   = @($realGreen | Where-Object { $_ -eq 'NESTOR.md' }).Count
-        Assert-Eq 11 $realSkills.Count "C1. real ref: 11 sdlc* skills (derived)"
+        Assert-Eq 14 $realSkills.Count "C1. real ref: 14 sdlc* skills (derived)"
         Assert-Eq 19 $realCmd          "C1. real ref: 19 commands (derived)"
         Assert-Eq 12 $realAgents       "C1. real ref: 12 agents (sdlc-*, derived)"
         Assert-Eq 0  $realCore         "C1. real ref: 0 NESTOR.md core (outside the SDLC domain)"
     } else {
         Write-Host "  (C1 skipped: real ref not found at $realRef)" -ForegroundColor DarkYellow
+    }
+
+    # =======================================================================
+    # (C1b) real ref deployed into an isolated live: the skills merged from BPSE
+    # and their supporting files arrive; a foreign skill is left untouched.
+    # =======================================================================
+    Write-Host "-- (C1b) real ref installed into an isolated live --" -ForegroundColor Cyan
+    if (Test-Path -LiteralPath $realRef) {
+        $live1b = Join-Path $root 'c1b/live'
+        New-Item -ItemType Directory -Force -Path (Join-Path $live1b 'skills/se-tdd') | Out-Null
+        [System.IO.File]::WriteAllText((Join-Path $live1b 'skills/se-tdd/SKILL.md'), "foreign skill`n")
+        $k1b = [pscustomobject]@{ Live = $live1b }
+        $r1b = Invoke-InstallCase -P @{ SourceRoot = $realRef; ClaudeRoot = $live1b }
+        Assert-True (Test-Live $k1b 'skills/sdlc-delivery/SKILL.md')                   "C1b. sdlc-delivery skill deployed"
+        Assert-True (Test-Live $k1b 'skills/sdlc-architecture/references/messaging.md') "C1b. sdlc-architecture messaging checklist"
+        Assert-True (Test-Live $k1b 'skills/sdlc-contract/assets/contract.md')         "C1b. sdlc-contract contract sheet"
+        Assert-True (Test-Live $k1b 'skills/sdlc/assets/5_delivery.template.md')       "C1b. 5_delivery template deployed"
+        Assert-True (Test-Live $k1b 'skills/sdlc/SOURCES.md')                          "C1b. SOURCES.md deployed"
+        Assert-Eq 14 (@(Get-SyncDomainSkill -Root $live1b)).Count "C1b. live sdlc* skills == 14"
+        Assert-Eq "foreign skill`n" (Read-Text (Join-Path $live1b 'skills/se-tdd/SKILL.md')) "C1b. foreign skill outside the domain untouched"
+    } else {
+        Write-Host "  (C1b skipped: real ref not found at $realRef)" -ForegroundColor DarkYellow
     }
 
     # =======================================================================

@@ -397,9 +397,11 @@ def _digest(text: str) -> str:
 KNOWN_SHIPPED_SKELETONS: dict[str, set[str]] = {
     "2_architecture": {
         "cd778a69fec2ed93ceaaf0c3a0281e5112757ab1278689536728fb1c5faa9f28",  # release e28448a
+        "5e782cbc1972981731a5fa3383b610299f218b58aa4a21342e3989d91f7423ca",  # 63b5a4c (before BPSE)
     },
     "4_tests": {
         "070623a7351c4354357569b1155946af4faeac61c224ce13ecc27ded57b2cf11",  # release e28448a
+        "3c8742ce3b68bd6467b52f370926f1d074fe3b4a63a068545938d1433bbef661",  # 63b5a4c (before BPSE)
     },
 }
 
@@ -411,6 +413,146 @@ def _is_unauthored_skeleton(text: str, name: str) -> bool:
     if template.exists():
         known.add(_digest(template.read_text(encoding="utf-8")))
     return _digest(text) in known
+
+
+# Status value written by the architect under --auto-approve; only the user sets Accepted (BPSE 2.5).
+AUTO_APPROVE_STATUS = re.compile(
+    r"^[ \t]*[-*][ \t]*\*\*Status\*\*[ \t]*:[ \t]*(?:⬜[ \t]*)?Proposed — auto-approve[ \t]*$",
+    re.MULTILINE,
+)
+
+
+def _decodes(path: Path) -> bool:
+    """True when the file is absent or valid UTF-8."""
+    try:
+        if path.exists():
+            path.read_text(encoding="utf-8")
+        return True
+    except UnicodeDecodeError:
+        return False
+
+
+def check_decision_statuses(current_v: Path, warnings: list[str]) -> None:
+    """Warn (never block) about A### still waiting for the user: status `Proposed — auto-approve`.
+
+    The status exists only in the template version that introduced it, so older A### never raise
+    it. Code blocks are examples and are ignored.
+    """
+    text = strip_fences(read_text(current_v / CHAIN_FILES["A"]))
+    sections = re.split(r"^###[ \t]+(A\d{3})", text, flags=re.MULTILINE)
+    pending = [
+        sections[i]
+        for i in range(1, len(sections), 2)
+        if AUTO_APPROVE_STATUS.search(sections[i + 1] if i + 1 < len(sections) else "")
+    ]
+    if pending:
+        warnings.append(
+            f"Decisions written under --auto-approve, not yet accepted by the user: {pending} "
+            "(see HANDOFF.md)."
+        )
+
+
+# An A### the user has not accepted yet, with or without auto-approve. The option list of the
+# template is not a status: the pattern needs the line to end after the single value.
+UNACCEPTED_STATUS = re.compile(
+    r"^[ \t]*[-*][ \t]*\*\*Status\*\*[ \t]*:[ \t]*(?:⬜[ \t]*)?Proposed(?: — auto-approve)?[ \t]*$",
+    re.MULTILINE,
+)
+PLAIN_PROPOSED_STATUS = re.compile(
+    r"^[ \t]*[-*][ \t]*\*\*Status\*\*[ \t]*:[ \t]*(?:⬜[ \t]*)?Proposed[ \t]*$", re.MULTILINE
+)
+
+
+def check_tasks_under_pending_replacement(current_v: Path, errors: list[str]) -> None:
+    """Error: a P### hangs from a replacing A### (`Supersedes`) still plainly `Proposed`.
+
+    REV-002, scope set by the user after inspection BPSE 4: until the user accepts a replacement,
+    the decision it names stays in force, so no task may be built on the replacement. Out of scope
+    on purpose: `Proposed — auto-approve` (a non-blocking warning, plan 2.5) and a `Proposed` A###
+    without `Supersedes` (the status existed before this rule; older projects keep passing).
+    """
+    arch = strip_fences(read_text(current_v / CHAIN_FILES["A"]))
+    parts = re.split(r"^###[ \t]+(A\d{3})", arch, flags=re.MULTILINE)
+    pending = set()
+    for i in range(1, len(parts), 2):
+        body = parts[i + 1] if i + 1 < len(parts) else ""
+        if PLAIN_PROPOSED_STATUS.search(body) and SUPERSEDES_FIELD.search(body):
+            pending.add(parts[i])
+    if not pending:
+        return
+    tasks = strip_fences(read_text(current_v / CHAIN_FILES["P"]))
+    parts = re.split(r"^####[ \t]+(P\d{3}):(A\d{3})", tasks, flags=re.MULTILINE)
+    for i in range(1, len(parts), 3):
+        pid, parent = parts[i], parts[i + 1]
+        if parent in pending:
+            errors.append(
+                f"{pid} hangs from {parent}, a replacement not accepted yet: the decision it replaces "
+                "stays in force until the user accepts it (see HANDOFF.md)."
+            )
+
+
+SUPERSEDED_STATUS = re.compile(
+    r"^[ \t]*[-*][ \t]*\*\*Status\*\*[ \t]*:[ \t]*(?:↪[ \t]*)?Superseded by A\d{3}", re.MULTILINE
+)
+DONE_STATUS = re.compile(r"^[ \t]*[-*][ \t]*\*\*(?:Status|Statut)\*\*[ \t]*:[ \t]*✅", re.MULTILINE)
+
+
+def check_superseded_tasks(current_v: Path, errors: list[str]) -> None:
+    """A superseded or rejected A### keeps its finished P### as history; an unfinished one must not run.
+
+    Every P### that hangs from a superseded or rejected A### and is not ✅ is an error: retire it
+    from 3_conception.md or re-parent it (BPSE 4.3, inspections SDLC-REV-001 and SDLC-BPSE-005).
+    """
+    arch = strip_fences(read_text(current_v / CHAIN_FILES["A"]))
+    parts = re.split(r"^###[ \t]+(A\d{3})", arch, flags=re.MULTILINE)
+    retired: dict[str, str] = {}
+    for i in range(1, len(parts), 2):
+        body = parts[i + 1] if i + 1 < len(parts) else ""
+        if SUPERSEDED_STATUS.search(body):
+            retired[parts[i]] = "superseded"
+        elif REJECTED_STATUS.search(body):
+            retired[parts[i]] = "rejected"
+    if not retired:
+        return
+    tasks = strip_fences(read_text(current_v / CHAIN_FILES["P"]))
+    parts = re.split(r"^####[ \t]+(P\d{3}):(A\d{3})", tasks, flags=re.MULTILINE)
+    for i in range(1, len(parts), 3):
+        pid, parent = parts[i], parts[i + 1]
+        body = parts[i + 2] if i + 2 < len(parts) else ""
+        if parent in retired and not DONE_STATUS.search(body):
+            target = "the replacing A###" if retired[parent] == "superseded" else "a decision in force"
+            errors.append(
+                f"{pid} is not done and hangs from {retired[parent]} {parent}: retire it or "
+                f"re-parent it to {target}."
+            )
+
+
+REJECTED_STATUS = re.compile(r"^[ \t]*[-*][ \t]*\*\*Status\*\*[ \t]*:[ \t]*(?:❌[ \t]*)?Rejected", re.MULTILINE)
+SUPERSEDES_FIELD = re.compile(r"^[ \t]*[-*][ \t]*\*\*Supersedes\*\*[ \t]*:[ \t]*A\d{3}", re.MULTILINE)
+
+
+def check_decisions_in_force(current_v: Path, errors: list[str], warnings: list[str]) -> None:
+    """Every A### in force needs at least one P### (inspection SDLC-R02).
+
+    A replacing decision (`Supersedes: A###`) without a task is an error: the replacement would never
+    be built. A replacement the user has not accepted yet is a warning only: the decision it names
+    stays in force meanwhile (SDLC-BPSE-004). Any other decision in force without a task is a
+    warning, as documented in traceability.md. Superseded and rejected decisions need no new task.
+    """
+    arch = strip_fences(read_text(current_v / CHAIN_FILES["A"]))
+    parts = re.split(r"^###[ \t]+(A\d{3})", arch, flags=re.MULTILINE)
+    tasks = strip_fences(read_text(current_v / CHAIN_FILES["P"]))
+    parents = set(re.findall(r"^####[ \t]+P\d{3}:(A\d{3})", tasks, flags=re.MULTILINE))
+    for i in range(1, len(parts), 2):
+        aid, body = parts[i], parts[i + 1] if i + 1 < len(parts) else ""
+        if SUPERSEDED_STATUS.search(body) or REJECTED_STATUS.search(body) or aid in parents:
+            continue
+        if SUPERSEDES_FIELD.search(body) and UNACCEPTED_STATUS.search(body):
+            warnings.append(f"{aid} is a replacement waiting for the user's acceptance; no P### yet.")
+        elif SUPERSEDES_FIELD.search(body):
+            errors.append(f"{aid} replaces an earlier decision but no P### implements it.")
+        else:
+            warnings.append(f"{aid} is in force but no P### implements it yet.")
 
 
 def check_chain(current_v: Path, tier: str | None, errors: list[str], phase: str = "release") -> None:
@@ -544,6 +686,13 @@ def check_traceability(
         check_handoff(sdlc_dir, today, errors, warnings)
     if needs_version and current_v is not None:
         check_chain(current_v, tier, errors, phase=phase)
+        # The decision checks reread A and P. An undecodable file already has its ❌ line from
+        # check_chain, so they are skipped instead of raising a traceback (SDLC-BPSE-003).
+        if all(_decodes(current_v / CHAIN_FILES[k]) for k in ("A", "P")):
+            check_decision_statuses(current_v, warnings)
+            check_superseded_tasks(current_v, errors)
+            check_tasks_under_pending_replacement(current_v, errors)
+            check_decisions_in_force(current_v, errors, warnings)
 
     asvs_level = int(config.get("asvs_level", 1)) if config else 0
     if tier == "full" and asvs_level < 1:

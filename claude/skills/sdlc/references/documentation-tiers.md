@@ -86,15 +86,40 @@ then **proposes** a default tier, which the user can change.
   - `2_5_discussion.md` (for M/L projects)
   - `3_conception.md` (P###:A### + wave)
   - `4_tests.md` (T###:P### + coverage)
+  - `5_delivery.md` (CI, secrets by name, migrations, rollback, evidence — written by
+    `sdlc-delivery` before `/sdlc:finish`)
   - `HANDOFF.md` + `RESUME.md`
+- **If applicable**: the "Boundaries & dependencies" section of `2_architecture.md`
+  (`sdlc-architecture`) and machine-readable contracts linked from "Interfaces / API"
+  (`sdlc-contract`).
 - **Complete** AQ Gate: strict E→A→P→T, no unfilled placeholder, ASVS L1+. The gate does not measure test coverage.
 - **When**: serious project, more than 3 months, or production impact.
+
+### Verified by the gate, or indicative
+
+Each deliverable is either checked mechanically by `check_sdlc.py` or only indicative. An
+indicative deliverable is proved by the commands and results quoted in it, never by the gate.
+
+| Deliverable | Status |
+|---|---|
+| E→A→P→T chain (`1_` to `4_`), placeholders, blockers | Verified by the gate |
+| `HANDOFF.md` + `RESUME.md` (present, filled, HANDOFF date) | Verified by the gate (age: warning) |
+| ASVS scan (`asvs_level >= 1`) | Verified by the gate |
+| A### status `Proposed — auto-approve` | Verified by the gate (non-blocking warning) |
+| Unfinished P### of a superseded or rejected A### | Verified by the gate (error) |
+| P### under a replacing A### still `Proposed` | Verified by the gate (error; under auto-approve: warning) |
+| Test coverage against `test_coverage_min` | Indicative |
+| "Boundaries & dependencies" section, contracts (`sdlc-architecture`, `sdlc-contract`) | Indicative (proved by their dependency check and contract tests, as T###) |
+| `5_delivery.md` (`sdlc-delivery`) | Indicative (proved by the evidence it quotes); `sdlc-finish` requires it at tier `full`+ |
+| `2_5_discussion.md` | Indicative |
 
 ### Tier `exhaustive`
 
 - Tier `full` plus:
   - ASVS L2 or L3 required (`asvs_level >= 2`).
-  - Per-phase hooks enabled (`hooks/` present and run — planned, not yet implemented).
+  - Per-phase hooks enabled (`hooks/` present and run — planned, not yet implemented). The first
+    one, a reminder after each code edit naming the expected P### and T###, is deferred: it needs
+    a hook in the user's `settings.json`, which the framework never changes on its own.
   - Phase Z (immutable archive) at each release or abandonment (planned, not yet implemented).
   - A version log kept in addition to `CHANGELOG.md`.
 - **When**: critical, multi-team, long-running or regulated system.

@@ -23,6 +23,19 @@ Equivalent slash command: `/sdlc:gate`.
 | 2 | ERROR | Invalid `sdlc-config.json` (JSON syntax). The PowerShell wrapper also exits 2 when Python or `check_sdlc.py` is missing |
 
 Warnings (lines starting with `⚠️`) do not change the exit code. The wrapper's JSON output lists them in `warnings`.
+Warnings: a HANDOFF older than 7 days; A### whose status is still `Proposed — auto-approve`
+(written under `--auto-approve`, not yet accepted by the user, with or without P###; see
+`auto-approve.md`); an A### in force with no P### yet; a replacing A### (`Supersedes`) still
+waiting for the user's acceptance, with no P### yet. Status lines inside code blocks are
+examples and are ignored.
+
+Decision errors:
+- A P### that hangs from an A### marked `Superseded by A###` or `Rejected` and is not ✅. Retire it
+  from `3_conception.md` or re-parent it; finished P### stay as history.
+- A P### that hangs from a replacing A### (`Supersedes`) still plainly `Proposed`: the decision it
+  replaces stays in force until the user accepts the replacement. A `Proposed` A### without
+  `Supersedes` is not judged (the status predates this rule, so older projects keep passing).
+- An accepted replacing A### with no P###: the replacement would never be built.
 
 ## Checks by documentation tier
 

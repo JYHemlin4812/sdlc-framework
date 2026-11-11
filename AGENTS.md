@@ -19,13 +19,16 @@
 
 Strict scope: `claude/` only — nothing outside this folder is covered here.
 
-### Skills (11)
+### Skills (14)
 
 | Skill | Role | Source |
 |---|---|---|
 | `sdlc` | Full SDLC framework v4.0: scoping, architecture, design, tests, E→A→P→T traceability, AQ Gate, Code Lock, execution by waves, model profiles and per-tier effort | `claude/skills/sdlc/SKILL.md` |
+| `sdlc-architecture` | Boundaries and dependencies for the architecture phase (layers, DTOs, composition point, dependency check, messaging checklist) | `claude/skills/sdlc-architecture/SKILL.md` |
 | `sdlc-asvs-auditor` | Configurable OWASP ASVS security audit (L1/L2/L3) of the source code | `claude/skills/sdlc-asvs-auditor/SKILL.md` |
+| `sdlc-contract` | Public API/event contracts as machine-readable schemas, written before the code | `claude/skills/sdlc-contract/SKILL.md` |
 | `sdlc-debugger` | Structured root-cause-first debugging: root cause before any fix | `claude/skills/sdlc-debugger/SKILL.md` |
+| `sdlc-delivery` | Verifiable delivery before `sdlc-finish`: CI, secrets by name, migrations, rollback, evidence (`5_delivery.md` at tier full+) | `claude/skills/sdlc-delivery/SKILL.md` |
 | `sdlc-evolve` | TDD discipline (RED → GREEN → REFACTOR) for every evolving P### | `claude/skills/sdlc-evolve/SKILL.md` |
 | `sdlc-finish` | Structured close-out of a development branch (merge, PR, keep, discard) | `claude/skills/sdlc-finish/SKILL.md` |
 | `sdlc-lang-dispatcher` | Routes each P### to the language standards (Python/JS/Go/Rust) and the matching `sdlc-*-dev` agent | `claude/skills/sdlc-lang-dispatcher/SKILL.md` |

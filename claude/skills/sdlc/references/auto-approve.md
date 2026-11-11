@@ -23,6 +23,10 @@ The CLI flag wins over the config, and the config wins over the environment.
 | Confirmation before dev | Asks Y/N | Skipped |
 | Confirmation before gate | Asks Y/N | Skipped |
 | Confirmation before report | Asks Y/N | Skipped |
+| Accepting a new A### (tier `full`) | The user sets **Accepted** | Written **Proposed — auto-approve**, listed in `HANDOFF.md`; the AQ Gate shows a non-blocking warning until the user accepts it |
+
+Only new A### are concerned: A### written before this rule existed keep their status and raise
+no warning. Auto-approve never sets **Accepted** on the user's behalf.
 
 ## What does not change (safeguards stay active)
 

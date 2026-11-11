@@ -25,9 +25,13 @@ Adapted from `finishing-a-development-branch` in
 - **When to use:** (1) after `/sdlc:gate` exit 0 on the last wave of a
   version; (2) on `/sdlc:finish`, or alongside `/sdlc:exit` to decide the
   final integration.
-- **Place in the pipeline:** final step after a successful `dev → gate`.
-  Comes before regenerating HANDOFF and bumping the version in
-  `SDLC_PM/v<X>/`.
+- **Place in the pipeline:** final step after a successful
+  `dev → gate → delivery`. Comes before regenerating HANDOFF and bumping the
+  version in `SDLC_PM/v<X>/`.
+- **Prerequisite (step 0), even when invoked directly:** the delivery has been
+  prepared by `sdlc-delivery`. At tier `full` and above, `SDLC_PM/v<X>/5_delivery.md`
+  exists and is filled; otherwise run `sdlc-delivery` first. Below `full`, run
+  its checklist and carry the result into the PR body.
 - **Deliverable:** depending on the chosen option — local merge done, PR
   created and its URL returned, branch kept for later, or cleanup confirmed.
   Record the decision in the "Revisions" section of `HANDOFF.md`.
@@ -43,8 +47,31 @@ as they are.
 
 ## Process
 
-Verify tests → detect environment → determine base branch → present options
-→ execute the choice → clean up.
+Check the delivery prerequisite → verify tests → detect environment →
+determine base branch → present options → execute the choice → clean up.
+
+### Step 0: Delivery prerequisite
+
+Read `documentation_tier` (no `SDLC_PM/` at all means tier `none`). At `full` and above, check that
+`SDLC_PM/v<X>/5_delivery.md` exists, holds no template placeholder, and
+describes the current code. The evidence is still current when nothing differs
+from its **Prepared at commit** `<C>`, committed or not, except the routine
+tracking files listed below. The config and the E/A/P/T documents are inputs
+of the release gate, so a change to them makes the evidence stale too
+(inspection SDLC-BPSE-006):
+
+```bash
+EXCLUDE=(':!SDLC_PM/HANDOFF.md' ':!SDLC_PM/RESUME.md' ':!SDLC_PM/STATE.md' ':!SDLC_PM/STOW.md' ':!SDLC_PM/SDLC_CHECKPOINT.md' ':!SDLC_PM/*/5_delivery.md')
+git diff --name-only <C> -- . "${EXCLUDE[@]}"                         # committed and uncommitted changes since <C>
+git ls-files --others --exclude-standard -- . "${EXCLUDE[@]}"         # new untracked files
+```
+
+Committing the delivery document itself (or the tracking files above) does not
+make it stale. If a check fails (missing, unfilled, or code changed since
+`<C>`), invoke `sdlc-delivery` to prepare or refresh it, and stop until it is
+done; never reuse evidence or rollback steps written for other code.
+Below `full`, run the `sdlc-delivery` checklist on the current code. Merging, pushing or opening a PR still needs the
+user's choice below: preparing the delivery authorizes none of them.
 
 ### Step 1: Verify tests
 
@@ -66,7 +93,12 @@ Tests failing (<N> failures). They must be fixed before completing:
 Merge/PR is on hold until tests pass.
 ```
 
-If tests pass, quote the result (see `sdlc-verify`) and continue to step 2.
+If tests pass, quote the result (see `sdlc-verify`). Then rerun the release
+gate (`/sdlc:gate`) on the current artifacts: the AQ PASS recorded in
+`5_delivery.md` proves only the state it was run on. If the gate fails, stop
+and report its ❌ lines; merge/PR is on hold until it passes. A project with no
+`SDLC_PM/` (tier `none`) has no gate: report the AQ Gate as not applicable and
+never create `SDLC_PM/` to satisfy this step. Then continue to step 2.
 
 ### Step 2: Detect the environment
 
@@ -155,14 +187,24 @@ git push -u origin <feature-branch>
 
 # Create the PR
 gh pr create --title "<title>" --body "$(cat <<'EOF'
-## Summary
-<2-3 bullets of what changed>
+## Problem
+<what was wrong or missing>
 
-## Test Plan
-- [ ] <verification steps>
+## Behavior
+<final behavior, linked E### / P###>
+
+## Evidence
+<commands run and their results, from 5_delivery.md or sdlc-delivery>
+
+## Risks and rollback
+<residual risks, rollback steps, checks not run>
 EOF
 )"
 ```
+
+The body comes from the draft at the end of `5_delivery.md` (tier `full` and
+above) or from the `sdlc-delivery` checklist. Never list a check that was not
+run as passed.
 
 Keep the worktree: the user needs it to iterate on PR feedback.
 

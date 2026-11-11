@@ -52,7 +52,7 @@ Firm rules:
 - **Framework**: `pytest` only
 - **Naming**: `test_<function>_<scenario>` (e.g. `test_parse_csv_empty_file`)
 - **Fixtures**: prefer `tmp_path`, `monkeypatch`
-- **Coverage target**: 70% minimum (configurable via `test_coverage_min`)
+- **Coverage target**: the project's `test_coverage_min` (default 70%), an indicator rather than a universal quota; never invent a threshold the project did not set
 - **Required edge cases**: empty input, None, extreme value, wrong type
 
 ## Recommended project layout

@@ -65,13 +65,19 @@ Exceptions (confirm with the user):
 ## The rule
 
 ```
-No production code without a failing test first.
+No new production behavior without a failing test first.
 ```
 
-If you wrote production code before its test, set that code aside and
+If you wrote new production code before its test, set that code aside and
 re-implement it from the test. Don't keep it as a reference or adapt it
 while writing the test: a test shaped around existing code only confirms
 what was built, not what was required.
+
+Two declared cases are not violations (details in "When RED cannot be
+observed" below): a **characterization** test pinning existing behavior
+(before a refactor or on untested legacy code), and a test **written after**
+code that is kept, when the user agreed to keep it. Both are recorded with
+their RED status in `4_tests.md`; neither is passed off as an observed RED.
 
 ## Red-Green-Refactor
 
@@ -152,9 +158,27 @@ Confirm:
 - The failure message is the expected one
 - It fails because the feature is missing, not because of a typo
 
-Test passes? It is testing existing behavior; fix the test.
+Test passes? For **new behavior**, it is testing existing behavior; fix the test. A compile
+or dependency error is not the failure you are looking for either.
 
 Test errors? Fix the error and re-run until it fails for the right reason.
+
+### When RED cannot be observed: characterization and tests written after
+
+The strict rule above applies to **new behavior**. Two cases are different, and must be
+declared rather than hidden:
+
+- **Characterization**: a test pinning behavior that already exists (before a refactor, or on
+  legacy code with no tests) passes on its first run. That is expected: it is not invalid, it
+  just does not prove that a new regression was reproduced.
+- **Written after**: the code came first (exploration kept, emergency fix) and the user agreed to
+  keep it rather than re-implement it from a test. Say so; never claim you observed RED.
+
+Record the RED status of each such test in `4_tests.md` — `observed`, `characterization` or
+`written-after` — and, when the risk justifies it, check the test's sensitivity with a
+**targeted mutation on an isolated copy or worktree** (break the behavior, see the test fail,
+discard the copy). Never break the shared working tree to prove a test: other P### of the
+same wave may be running in it, and Code Lock forbids unplanned edits there.
 
 ### GREEN — minimal code
 
@@ -254,14 +278,14 @@ Tests-after answer "what does this do?"; tests-first answer "what should this do
 | Excuse | Reality |
 |--------|---------|
 | "Too simple to test" | Simple code breaks too, and the test takes seconds. |
-| "I'll test after" | Tests that pass immediately prove nothing. |
+| "I'll test after" | For new behavior, tests that pass immediately prove nothing. A characterization test of existing behavior is the exception, and is declared as such. |
 | "Already tested manually" | No record, can't re-run. |
 | "Keep it as a reference while writing tests" | You'll adapt it, which is testing after. |
 | "Need to explore first" | Fine — treat the exploration as throwaway, then start with TDD. |
 | "Hard to test" | Hard to test usually means hard to use; simplify the design. |
 | "Existing code has no tests" | You're changing it, so add tests for the part you touch. |
 
-Warning signs that TDD was skipped: code written before its test, a test that passes on first run, a failure you can't explain, tests deferred to "later", or "this case is different because…". When you notice one, go back to RED.
+Warning signs that TDD was skipped: code written before its test, a test of new behavior that passes on first run (and is not declared as characterization), a failure you can't explain, tests deferred to "later", or "this case is different because…". When you notice one, go back to RED.
 
 ## Example: bug fix
 
@@ -303,8 +327,10 @@ Extract validation for multiple fields if needed.
 ## Checklist before marking the P### done
 
 - [ ] Every new function/method has a test
-- [ ] Each test was seen failing before implementation
-- [ ] Each test failed for the expected reason (feature missing, not a typo)
+- [ ] Each test of new behavior was seen failing before implementation
+- [ ] Each such test failed for the expected reason (feature missing, not a typo)
+- [ ] Every other test has its RED status recorded in `4_tests.md`
+      (`characterization` or `written-after`), never `observed`
 - [ ] Minimal code written to pass each test
 - [ ] All tests pass
 - [ ] Output clean (no errors, no warnings)
@@ -336,8 +362,10 @@ When adding mocks or test utilities, read @testing-anti-patterns.md. It covers:
 ## Final rule
 
 ```
-Production code → a test exists and failed first
-Otherwise → not TDD
+New production behavior → a test exists and failed first (RED: observed)
+Existing behavior pinned before a change → characterization test, declared
+Code kept that came first → written-after test, declared, with the user's agreement
+Anything else → not TDD
 ```
 
-Exceptions only with the user's agreement.
+Other exceptions only with the user's agreement.

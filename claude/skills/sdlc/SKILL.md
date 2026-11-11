@@ -210,7 +210,10 @@ fresh handoff file.
 | `sdlc-asvs-auditor` | On `/sdlc:security`, or in the gate when `asvs_level >= 1` | `Skill` tool, or run `asvs_scanner.py` directly |
 | `sdlc-debugger` | On `/sdlc:fix` or `/sdlc:debug`, for a red T###, a 🚫 P###, or AQ Gate exit 1 | `Skill` tool — root-cause phase comes before any fix |
 | `sdlc-reviewer` | On `/sdlc:review`, typically just before `/sdlc:gate` or after a major P### lands | `Skill` tool — dispatches a `general-purpose` subagent with the `code-reviewer.md` template |
-| `sdlc-finish` | On `/sdlc:finish`, after `/sdlc:gate` exit 0 on the last wave of a version | `Skill` tool — test check → environment detection → merge/PR/keep/discard options |
+| `sdlc-architecture` | During `/sdlc:plan` at tier `full`+, when the project has real boundaries | `Skill` tool — fills "Boundaries & dependencies" in `2_architecture.md`; adapted from BPSE `se-architecture` |
+| `sdlc-contract` | During `/sdlc:plan` when an A### exposes an API or events | `Skill` tool — machine-readable schema before code, linked from "Interfaces / API"; adapted from BPSE `se-api-contract` |
+| `sdlc-delivery` | After `/sdlc:gate` exit 0 on the last wave, before `sdlc-finish` (which requires it) | `Skill` tool — CI, secrets, migrations, rollback, evidence; `5_delivery.md` at tier `full`+; adapted from BPSE `se-delivery` |
+| `sdlc-finish` | On `/sdlc:finish`, after `/sdlc:gate` exit 0 and `sdlc-delivery` on the last wave of a version | `Skill` tool — delivery check → test check → environment detection → merge/PR/keep/discard options |
 | `sdlc-evolve` (proxy) | On `/sdlc:evolve`, or during `/sdlc:dev` for a new evolving P### | `Skill` tool — RED→GREEN→REFACTOR; adapted from `test-driven-development` (obra/superpowers) |
 | `sdlc-verify` | Before marking a P### ✅, before a commit, before `/sdlc:gate`, before relaying a dev subagent's report | `Skill` tool — run the verification command and quote its result; adapted from `verification-before-completion` (obra/superpowers) |
 | `sdlc-receive-review` | When review feedback arrives (from `sdlc-reviewer`, an external reviewer, or the user), before applying fixes | `Skill` tool — verify before implementing, no performative agreement; adapted from `receiving-code-review` (obra/superpowers) |
@@ -290,7 +293,12 @@ explicit recommendation. `2_5_discussion.md` feeds the A### of phase 2 directly.
 1. Read `1_elicitation.md` (and `2_5_discussion.md` if present).
 2. Produce `2_architecture.md`: for each MUST/SHOULD E###, at least one `A###:E###` with an ADR
    (context, decision, consequences). At tier `standard`, architecture is optional (REV-003): skip
-   it unless asked.
+    it unless asked.
+2b. Decision acceptance: present the new **Proposed** A### to the user; set **Accepted** or
+   **Rejected** only on the user's explicit answer and record it in `HANDOFF.md`. An accepted
+   replacement (`Supersedes: A###`) marks the old A### **Superseded by A###** now; a rejected one
+   leaves the old A### in force. Unfinished P### of a rejected A### are retired or re-parented. Under `--auto-approve`, list the **Proposed — auto-approve** A### in
+   `HANDOFF.md` as pending (same as `commands/sdlc/plan.md`, step 1b).
 3. Produce `3_conception.md`: break each A### into P###:A### when written A### exist; use P###:E### only
    when no A### exists (standard tier without architecture). Never P###:E### when A### exist. Each P### carries:
    - an initial `**wave**` field (`wave_planner.py` may recompute it)
@@ -299,6 +307,9 @@ explicit recommendation. `2_5_discussion.md` feeds the A### of phase 2 directly.
    - a `**Status**` field
    - Size S/M/L
    - the language, if multi-stack
+3b. Retired tasks: for each P### retired from a superseded A###, remove its T### from
+   `4_tests.md` and its entry from `STATE.md` (under the `lockfile_helper.py` mutex), so neither
+   the release gate nor the wave orchestrator still sees it (`commands/sdlc/plan.md`, step 2b).
 4. Run `wave_planner.py --annotate` to validate/recompute the waves.
 5. Run `check_sdlc.py --phase plan` (AQ Gate for planning; `4_tests.md` is not written yet). On ❌ → fix and rerun. On ✅ → announce `/sdlc:dev`.
 
@@ -332,8 +343,10 @@ inline, and do not spawn subagents to double-check your own work. Respect `max_p
 
 ### Phase 4 — Tests (part of `/sdlc:dev`)
 
-For each P### executed, create/update its T###:P### in `4_tests.md`. Target coverage =
-`test_coverage_min` (default 0.7).
+For each P### executed, create/update its T###:P### in `4_tests.md`, with its level rationale,
+RED status (`observed` / `characterization` / `written-after`), command run and checks not run.
+Coverage target = the project's `test_coverage_min` (default 0.7): an indicator, not a universal
+quota, and not measured by the gate. Mutation testing is targeted at critical rules only.
 
 ### `/sdlc:gate`
 
@@ -418,3 +431,8 @@ Sub-skills adapted from [obra/superpowers](https://github.com/obra/superpowers):
 - `../sdlc-evolve/SKILL.md` — TDD discipline (adapted from `test-driven-development`, proxy for evolve)
 - `../sdlc-verify/SKILL.md` — evidence before claims (adapted from `verification-before-completion`)
 - `../sdlc-receive-review/SKILL.md` — receiving code review (adapted from `receiving-code-review`)
+
+Sub-skills adapted from BPSE (engineering practices by the framework's author; provenance in `SOURCES.md`):
+- `../sdlc-architecture/SKILL.md` — boundaries and dependencies, messaging checklist (from `se-architecture`)
+- `../sdlc-contract/SKILL.md` — public contracts before code (from `se-api-contract`)
+- `../sdlc-delivery/SKILL.md` — verifiable delivery before finish (from `se-delivery`)

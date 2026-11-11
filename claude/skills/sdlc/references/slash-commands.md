@@ -57,11 +57,16 @@ See `references/discussion-phase.md`. Optional.
      tool, model resolved from the profile). Input: `1_elicitation.md` + `2_5_discussion.md` (if
      present). Output: `2_architecture.md` (A###:E### + ADR + ASCII diagram).
    - Tier `standard`: skip the architect unless the user asks for an architecture document.
+1b. Decision acceptance (orchestrator): ask the user about each new **Proposed** A###, set
+   **Accepted** / **Rejected** on the explicit answer and record it in `HANDOFF.md`; an accepted
+   replacement marks the old A### **Superseded**. Under `--auto-approve`, list the pending A###.
 2. Spawn `sdlc-system-analyst` (Agent tool):
    - Input: `2_architecture.md` when written A### exist; otherwise `1_elicitation.md` (standard
      tier without architecture)
    - Output: `3_conception.md` with `**Depends on**`, `**Target files**`, `**Status**`. Parent:
      `P###:A###` when written A### exist, `P###:E###` only when none exists.
+2b. Retired tasks (orchestrator): remove the T### of every retired P### from `4_tests.md` and
+   its entry from `STATE.md` (under the `lockfile_helper.py` mutex).
 3. Run `wave_planner.py --conception ... --annotate` to compute/annotate the `**wave**` fields
 4. Run `check_sdlc.py --phase plan` once, here (AQ Gate for planning; `4_tests.md` is not written
    yet). The agents do not run it themselves.
@@ -122,6 +127,23 @@ nor to double-check your own work.
 **Precondition**: none
 
 Runs `scripts/check_sdlc.py` directly. See `references/aq-gate.md`.
+
+---
+
+## `/sdlc:finish`
+
+**Phase**: 5 (Delivery) + branch close-out
+**Output**: `5_delivery.md` (tier `full`+), then a logged integration decision
+**Precondition**: `/sdlc:gate` exit 0 on the last wave
+
+**Workflow**:
+1. Step 0 of `sdlc-finish`: delivery prerequisite. At tier `full` and above,
+   `SDLC_PM/v<X>/5_delivery.md` must exist and be filled; otherwise run `sdlc-delivery` first.
+   Below `full`, run the `sdlc-delivery` checklist into the PR body.
+2. Run the test suite and quote the result.
+3. Present the options (local merge, PR, keep, discard); destructive ones need a typed
+   confirmation. Preparing the delivery authorizes no merge, push or deployment.
+4. Log the decision in `HANDOFF.md` ("Revisions").
 
 ---
 

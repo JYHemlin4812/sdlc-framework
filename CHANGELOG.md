@@ -7,6 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- BPSE engineering practices merged into the framework (provenance and license in
+  `claude/skills/sdlc/SOURCES.md`):
+  - `sdlc-delivery` sub-skill and `5_delivery.template.md` (tier `full`+): CI with the
+    repository's real commands, secrets by name, migrations, deployment order, health signals,
+    rollback, evidence. `sdlc-finish` requires it (step 0) and builds the PR body from it.
+  - `sdlc-architecture` sub-skill and its messaging checklist; "Boundaries & dependencies"
+    section in `2_architecture.template.md` (if applicable, tier `full`+).
+  - `sdlc-contract` sub-skill and contract sheet; the Interfaces section of
+    `2_architecture.template.md` now points to a machine-readable schema.
+  - `README.template.md`, written by `sdlc-delivery` at tier `full`+ only when the project
+    has no README.
+  - Six behavior evals (proportionality, characterization, missing tool, 202 contract, broker
+    failure, routing of former BPSE requests).
+
+### Changed
+- TDD: characterization tests and tests written after the code are allowed when declared;
+  `4_tests.md` records each test's level rationale, RED status (`observed` /
+  `characterization` / `written-after`), command run and checks not run.
+- Coverage is the project's `test_coverage_min`, an indicator rather than a universal quota, in
+  every agent, standard and template.
+- Code review findings keep their severity and add certainty (confirmed / uncertain /
+  suggestion) and origin (introduced / pre-existing); reviews end with their limits.
+- `sdlc-verify`: a missing tool is "not run", a local run does not prove remote CI, and no
+  approval is ever invented.
+- Architecture decisions: Verification field, simplest viable option as baseline, statuses
+  `Proposed — auto-approve` and `Superseded by A###`; only the user sets `Accepted`. The
+  discussion phase splits open questions into blocking and reversible.
+- `3_conception.template.md`: a P### that defines a public contract names it (**Fixes
+  contract**) so its consumers depend on it.
+- `documentation-tiers.md` states, for each deliverable, whether the gate verifies it or it is
+  indicative.
+- `deploy_init.ps1 -Tier` / `deploy_init.sh --tier` create only the files of the chosen tier and
+  write it (and the project name) to the config; `/sdlc:init` passes the tier. Without the
+  option, every file is created as before. The bash script now parses `--force` in any position.
+- The AQ Gate fails when an unfinished P### hangs from a superseded A### (retire or re-parent it),
+  or when a replacing A### has no P###; any other A### in force without a P### is a warning. A
+  replacement supersedes the old decision only once the user accepts it.
+- `5_delivery.md` records the commit it describes; `sdlc-finish` refreshes it when the code has
+  moved since.
+- Deferred: the per-edit P###/T### reminder hook (BPSE plan 5.2) needs a change to the user's
+  `settings.json` and is not shipped.
+
 ### Fixed
 - AQ Gate (`check_sdlc.py`) now depends on `documentation_tier`. A standard project initialised
   with the untouched templates used to pass (exit 0); unfilled template placeholders are now

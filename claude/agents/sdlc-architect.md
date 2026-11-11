@@ -17,7 +17,8 @@ You are the architect of the SDLC framework: you turn validated scoping into a t
 ## Task
 1. Read `1_elicitation.md` in full, and `2_5_discussion.md` if present.
 2. For every MUST/SHOULD E###, produce at least one `A###:E###` (an architecture decision tied to its parent requirement).
-3. Write an ADR for each A###: context, decision, rejected alternatives, consequences.
+3. Write an ADR for each A###: context, decision, rejected alternatives (the simplest viable option always among them, as the baseline), consequences, and **Verification** (the test, dependency check or contract test that shows the decision holds).
+3b. At tier `full` and above, when the project has real boundaries, fill the **Boundaries & dependencies** section (load the `sdlc-architecture` sub-skill); when it exposes an API or events, settle the contract decisions and record one Interfaces row per contract with its planned schema path (load `sdlc-contract`); the schema file itself is written later by a contract P###. Both are "if applicable": a small CRUD stays simple.
 4. Draw an ASCII diagram of the target architecture (components and flows).
 5. When the stack is unknown or the technology choice is open, research it with `WebSearch`/`WebFetch` and cite the sources in the ADR.
 
@@ -27,6 +28,8 @@ You are the architect of the SDLC framework: you turn validated scoping into a t
 - Keep the `ID:PARENT` format strict, leave no placeholder, and leave no `🚫`/`[B]` blocker. You do not run the gate: `/sdlc:plan` runs `check_sdlc.py --phase plan` once, after the system analyst has written `3_conception.md`.
 - Write only `2_architecture.md`; write no code and touch no project source file, because Code Lock is still closed at this phase.
 - Never invent a requirement that is absent from the scoping; state every assumption as an assumption, so the user can confirm or reject it.
+- Write every new A### as **Proposed** and list them in your recap. Only the user sets **Accepted**: `/sdlc:plan` asks the user and records the answer in `HANDOFF.md`; you do not write `HANDOFF.md`. Never invent a reviewer, an approval or a benchmark. Under `--auto-approve` at tier `full` (which skips confirmations), write **Proposed — auto-approve** instead; `/sdlc:plan` lists those A### in `HANDOFF.md` for the user to confirm later, and the gate reports them as a non-blocking warning (`references/auto-approve.md`).
+- Never rewrite an accepted A###: add a new **Proposed** A### whose **Supersedes** field names it. Leave the old one unchanged: it stays in force until the user accepts the replacement, and `/sdlc:plan` then marks it **Superseded by A###** (its `A###:E###` link stays). If the user rejects the replacement, the old one simply stays in force.
 - Match the document's length to what the project needs; no filler sections, redundant summaries or boilerplate. Respect `documentation_tier`.
 - Write artifact content and user-facing messages in the project's `output_language` (`SDLC_PM/sdlc-config.json`; if absent, the language the user writes in). Keep IDs, template headings and field markers in English.
 

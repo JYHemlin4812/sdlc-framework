@@ -972,3 +972,335 @@ def test_wrapper_on_windows_powershell_reports_python_errors_as_json(tmp_path):
     data = json.loads(result.stdout)
     assert data["status"] == "ERROR" and data["exitCode"] == 2, data
     assert result.returncode == 2, result.stdout + result.stderr
+
+
+# --- BPSE integration tests (merged from feat/bpse-integration) ---
+
+
+@pytest.mark.parametrize("name", ["2_architecture", "3_conception", "4_tests", "5_delivery"])
+def test_bpse_templates_hold_no_active_blocker(name):
+    """A shipped template must never carry 🚫 or [B]: the gate would block every new project."""
+    text = (ASSETS / f"{name}.template.md").read_text(encoding="utf-8")
+    assert "🚫" not in text and "[B]" not in text
+
+
+def test_bpse_superseded_decision_passes_the_full_gate(tmp_path, capsys):
+    """A superseded A### keeps its link and its historical P###; the replacement has its own."""
+    project = make_project(tmp_path / "p", "full", asvs=1, chain="strict")
+    vdir = project / "SDLC_PM" / "v1.0.0"
+    (vdir / "2_architecture.md").write_text(
+        FILLED_ARCHITECTURE.replace(
+            "- **Covers** : E001\n",
+            "- **Covers** : E001\n- **Status** : ↪ Superseded by A002\n",
+        )
+        + "\n### A002:E001 — Use a streaming csv reader\n"
+        "- **Context** : Files grew beyond memory.\n"
+        "- **Decision** : Stream rows instead of loading the file.\n"
+        "- **Covers** : E001\n"
+        "- **Status** : ✅ Accepted\n"
+        "- **Supersedes** : A001, effective 2026-11-10\n",
+        encoding="utf-8",
+    )
+    (vdir / "3_conception.md").write_text(
+        FILLED_CONCEPTION_WITH_A
+        + "- **Status** : ✅\n"  # P001 was done before A001 was superseded: kept as history
+        + "\n#### P002:A002 — Stream the reader\n- **wave** : 1\n"
+        "- **Description** : Replace the loader.\n- **Depends on** : none\n",
+        encoding="utf-8",
+    )
+    (vdir / "4_tests.md").write_text(
+        FILLED_TESTS + "\n### T002:P002 — Streams a large file\n- **Target** : P002\n",
+        encoding="utf-8",
+    )
+    code = check_sdlc.check_traceability(project)
+    out = capsys.readouterr().out
+    assert code == 0, out
+
+
+# --- BPSE integration, plan action 2.5: A### accepted only by the user --------
+
+
+def _full_project_with_status(tmp_path, status_line):
+    project = make_project(tmp_path / "p", "full", asvs=1, chain="strict")
+    (project / "SDLC_PM" / "v1.0.0" / "2_architecture.md").write_text(
+        FILLED_ARCHITECTURE + status_line, encoding="utf-8"
+    )
+    return project
+
+
+def test_auto_approved_decision_is_a_non_blocking_warning(tmp_path, capsys):
+    """Plan 0.7/2.5: an A### left 'Proposed — auto-approve', with its P###, passes (exit 0) with a warning."""
+    project = _full_project_with_status(tmp_path, "- **Status** : ⬜ Proposed — auto-approve\n")
+    code = check_sdlc.check_traceability(project)
+    out = capsys.readouterr().out
+    assert code == 0, out
+    assert "⚠️" in out and "A001" in out and "auto-approve" in out, out
+
+
+@pytest.mark.parametrize(
+    "status_line",
+    [
+        "- **Status** : ✅ Accepted\n",
+        # SDLC-BPSE-002: Proposed existed before the acceptance rule; an older project with tasks passes.
+        "- **Status** : ⬜ Proposed\n",
+        "",  # A### written before the status rule: no status line at all
+        # The untouched list of options is not a decision taken by auto-approve.
+        "- **Status** : ⬜ Proposed | ⬜ Proposed — auto-approve | ✅ Accepted | ❌ Rejected | ↪ Superseded by A###\n",
+    ],
+)
+def test_other_decision_statuses_raise_no_auto_approve_warning(tmp_path, capsys, status_line):
+    project = _full_project_with_status(tmp_path, status_line)
+    code = check_sdlc.check_traceability(project)
+    out = capsys.readouterr().out
+    assert code == 0, out
+    assert "auto-approve" not in out, out
+
+
+def test_auto_approve_status_inside_a_code_block_is_an_example(tmp_path, capsys):
+    project = _full_project_with_status(
+        tmp_path, "\n```markdown\n- **Status** : ⬜ Proposed — auto-approve\n```\n"
+    )
+    code = check_sdlc.check_traceability(project)
+    out = capsys.readouterr().out
+    assert code == 0, out
+    assert "auto-approve" not in out, out
+
+
+# --- REV-002 (scope set after inspection BPSE 4): a pending replacement carries no task ---------
+
+
+def _pending_replacement_project(tmp_path, status, with_task):
+    """A001 accepted, in force, with P001; A002 replaces it with the given status."""
+    project = make_project(tmp_path / "p", "full", asvs=1, chain="strict")
+    vdir = project / "SDLC_PM" / "v1.0.0"
+    (vdir / "2_architecture.md").write_text(
+        FILLED_ARCHITECTURE + "- **Status** : ✅ Accepted\n"
+        "\n### A002:E001 — Stream rows\n- **Decision** : Stream.\n- **Covers** : E001\n"
+        f"- **Status** : {status}\n- **Supersedes** : A001, effective 2026-11-10\n",
+        encoding="utf-8",
+    )
+    tasks = FILLED_CONCEPTION_WITH_A
+    if with_task:
+        tasks += "\n#### P002:A002 — Stream the reader\n- **wave** : 1\n- **Depends on** : none\n"
+    (vdir / "3_conception.md").write_text(tasks, encoding="utf-8")
+    return project
+
+
+def test_task_under_a_pending_replacement_is_an_error(tmp_path, capsys):
+    project = _pending_replacement_project(tmp_path, "⬜ Proposed", with_task=True)
+    code = check_sdlc.check_traceability(project, phase="plan")
+    out = capsys.readouterr().out
+    assert code == 1, out
+    assert "P002" in out and "A002" in out and "not accepted" in out, out
+
+
+def test_task_under_an_auto_approved_replacement_is_a_warning(tmp_path, capsys):
+    """SDLC-BPSE-001: auto-approve never blocks (plan 2.5); the warning and HANDOFF carry it."""
+    project = _pending_replacement_project(tmp_path, "⬜ Proposed — auto-approve", with_task=True)
+    code = check_sdlc.check_traceability(project, phase="plan")
+    out = capsys.readouterr().out
+    assert code == 0, out
+    assert "auto-approve" in out and "A002" in out, out
+
+
+def test_pending_replacement_without_task_keeps_the_old_decision_in_force(tmp_path, capsys):
+    """SDLC-BPSE-004: a replacement waiting for the user needs no task yet; A001 still has its own."""
+    project = _pending_replacement_project(tmp_path, "⬜ Proposed", with_task=False)
+    code = check_sdlc.check_traceability(project, phase="plan")
+    out = capsys.readouterr().out
+    assert code == 0, out
+    assert "⚠️" in out and "A002" in out, out
+
+
+# --- SDLC-BPSE-005: a rejected decision runs no unfinished task ---------------------------------
+
+
+@pytest.mark.parametrize("task_status, expected", [("⬜", 1), ("✅", 0)])
+def test_unfinished_task_of_a_rejected_decision_blocks(tmp_path, capsys, task_status, expected):
+    project = make_project(tmp_path / "p", "full", asvs=1, chain="strict")
+    vdir = project / "SDLC_PM" / "v1.0.0"
+    (vdir / "2_architecture.md").write_text(
+        FILLED_ARCHITECTURE + "- **Status** : ❌ Rejected\n", encoding="utf-8"
+    )
+    (vdir / "3_conception.md").write_text(
+        FILLED_CONCEPTION_WITH_A + f"- **Status** : {task_status}\n", encoding="utf-8"
+    )
+    code = check_sdlc.check_traceability(project, phase="plan")
+    out = capsys.readouterr().out
+    assert code == expected, out
+    if expected:
+        assert "P001" in out and "rejected" in out, out
+
+
+# --- SDLC-BPSE-003: invalid UTF-8 in A or P is an error line, not a traceback -------------------
+
+
+@pytest.mark.parametrize("name", ["2_architecture.md", "3_conception.md"])
+def test_invalid_utf8_in_a_decision_document_is_an_error_line(tmp_path, capsys, name):
+    project = make_project(tmp_path / "p", "full", asvs=1, chain="strict")
+    path = project / "SDLC_PM" / "v1.0.0" / name
+    path.write_bytes(path.read_bytes() + b"\n\xff\xfe broken\n")
+    code = check_sdlc.check_traceability(project, phase="plan")
+    out = capsys.readouterr().out
+    assert code == 1, out
+    assert "not valid UTF-8" in out, out
+
+
+def test_templates_of_the_previous_version_count_as_not_created(tmp_path, capsys):
+    """Inspection SDLC-REV-003: optional skeletons copied by 63b5a4c, untouched, are still 'absent'."""
+    project = make_project(tmp_path / "p", "standard", chain="standard", fill=True)
+    vdir = project / "SDLC_PM" / "v1.0.0"
+    shutil.copy(SHIPPED_SKELETONS / "63b5a4c" / "2_architecture.template.md", vdir / "2_architecture.md")
+    shutil.copy(SHIPPED_SKELETONS / "63b5a4c" / "4_tests.template.md", vdir / "4_tests.md")
+    code = check_sdlc.check_traceability(project)
+    out = capsys.readouterr().out
+    assert code == 0, out
+
+
+def test_unfinished_task_of_a_superseded_decision_blocks_the_plan_gate(tmp_path, capsys):
+    """Inspection SDLC-REV-001: a pending P### of a superseded A### must be retired or re-parented."""
+    project = make_project(tmp_path / "p", "full", asvs=1, chain="strict")
+    vdir = project / "SDLC_PM" / "v1.0.0"
+    (vdir / "2_architecture.md").write_text(
+        FILLED_ARCHITECTURE + "- **Status** : ↪ Superseded by A002\n"
+        "\n### A002:E001 — Stream rows\n- **Decision** : Stream.\n- **Covers** : E001\n"
+        "- **Status** : ✅ Accepted\n",
+        encoding="utf-8",
+    )
+    (vdir / "3_conception.md").write_text(
+        FILLED_CONCEPTION_WITH_A + "- **Status** : ⬜\n"
+        "\n#### P002:A002 — Stream the reader\n- **wave** : 1\n- **Depends on** : none\n",
+        encoding="utf-8",
+    )
+    code = check_sdlc.check_traceability(project, phase="plan")
+    out = capsys.readouterr().out
+    assert code == 1, out
+    assert "P001" in out and "A001" in out and "superseded" in out.lower(), out
+
+
+# --- Inspection SDLC-REV-005: bootstrap by documentation tier ---------------------------------
+
+
+TIER_FILES = {
+    "minimal": {"HANDOFF.md", "RESUME.md", "sdlc-config.json"},
+    "standard": {"HANDOFF.md", "RESUME.md", "sdlc-config.json",
+                 "v1.0.0/0_context.md", "v1.0.0/1_elicitation.md", "v1.0.0/3_conception.md"},
+    "full": {"HANDOFF.md", "RESUME.md", "sdlc-config.json", "v1.0.0/0_context.md",
+             "v1.0.0/1_elicitation.md", "v1.0.0/2_architecture.md", "v1.0.0/2_5_discussion.md",
+             "v1.0.0/3_conception.md", "v1.0.0/4_tests.md"},
+}
+
+
+def _bootstrap_commands(project: Path, tier: str) -> list[list[str]]:
+    commands = []
+    if shutil.which("pwsh"):
+        commands.append([shutil.which("pwsh") or "pwsh", "-NoProfile", "-File",
+                         str(SCRIPTS_DIR / "deploy_init.ps1"), "-ProjectRoot", str(project), "-Tier", tier])
+    bash = shutil.which("bash")
+    if bash and "system32" not in bash.lower():  # skip the WSL launcher
+        commands.append([bash, str(SCRIPTS_DIR / "deploy_init.sh"), str(project), "--tier", tier])
+    return commands
+
+
+@pytest.mark.parametrize("tier", sorted(TIER_FILES))
+def test_bootstrap_creates_the_files_of_the_tier(tmp_path, tier):
+    commands = _bootstrap_commands(tmp_path / "probe", tier)
+    if not commands:
+        pytest.skip("neither pwsh nor bash available")
+    for index, command in enumerate(commands):
+        project = tmp_path / f"p{index}" / "demo-project"
+        project.mkdir(parents=True)
+        command = [project.as_posix() if part == str(tmp_path / "probe") else part for part in command]
+        result = subprocess.run(command, capture_output=True, text=True, encoding="utf-8",
+                                errors="replace", check=False)
+        assert result.returncode == 0, result.stdout + result.stderr
+        sdlc = project / "SDLC_PM"
+        created = {p.relative_to(sdlc).as_posix() for p in sdlc.rglob("*") if p.is_file()}
+        created.discard("SDLC_PLAN.md")
+        assert created == TIER_FILES[tier], (command[0], created ^ TIER_FILES[tier])
+        config = json.loads((sdlc / "sdlc-config.json").read_text(encoding="utf-8"))
+        assert config["documentation_tier"] == tier
+        assert config["project_name"] == "demo-project"
+
+
+def test_bootstrap_refuses_tier_none(tmp_path):
+    commands = _bootstrap_commands(tmp_path / "probe", "none")
+    if not commands:
+        pytest.skip("neither pwsh nor bash available")
+    for index, command in enumerate(commands):
+        project = tmp_path / f"p{index}"
+        project.mkdir()
+        command = [project.as_posix() if part == str(tmp_path / "probe") else part for part in command]
+        result = subprocess.run(command, capture_output=True, text=True, encoding="utf-8",
+                                errors="replace", check=False)
+        assert result.returncode == 1, result.stdout
+        assert not (project / "SDLC_PM").exists()
+
+
+# --- Inspection SDLC-R02: a decision in force needs a task ------------------------------------
+
+
+def _superseding_project(tmp_path, with_replacement_task):
+    project = make_project(tmp_path / "p", "full", asvs=1, chain="strict")
+    vdir = project / "SDLC_PM" / "v1.0.0"
+    (vdir / "2_architecture.md").write_text(
+        FILLED_ARCHITECTURE + "- **Status** : ↪ Superseded by A002\n"
+        "\n### A002:E001 — Stream rows\n- **Decision** : Stream.\n- **Covers** : E001\n"
+        "- **Status** : ✅ Accepted\n- **Supersedes** : A001, effective 2026-11-10\n",
+        encoding="utf-8",
+    )
+    tasks = FILLED_CONCEPTION_WITH_A + "- **Status** : ✅\n"
+    if with_replacement_task:
+        tasks += "\n#### P002:A002 — Stream the reader\n- **wave** : 1\n- **Depends on** : none\n"
+    (vdir / "3_conception.md").write_text(tasks, encoding="utf-8")
+    return project
+
+
+def test_superseding_decision_without_a_task_fails(tmp_path, capsys):
+    code = check_sdlc.check_traceability(_superseding_project(tmp_path, False), phase="plan")
+    out = capsys.readouterr().out
+    assert code == 1, out
+    assert "A002" in out, out
+
+
+def test_decision_in_force_without_a_task_is_a_warning(tmp_path, capsys):
+    project = make_project(tmp_path / "p", "full", asvs=1, chain="strict")
+    vdir = project / "SDLC_PM" / "v1.0.0"
+    (vdir / "2_architecture.md").write_text(
+        FILLED_ARCHITECTURE + "\n### A002:E001 — Log parse errors\n- **Decision** : Log.\n"
+        "- **Covers** : E001\n",
+        encoding="utf-8",
+    )
+    code = check_sdlc.check_traceability(project, phase="plan")
+    out = capsys.readouterr().out
+    assert code == 0, out
+    assert "⚠️" in out and "A002" in out, out
+
+
+def test_superseded_or_rejected_decision_without_a_task_is_fine(tmp_path, capsys):
+    project = make_project(tmp_path / "p", "full", asvs=1, chain="strict")
+    vdir = project / "SDLC_PM" / "v1.0.0"
+    (vdir / "2_architecture.md").write_text(
+        FILLED_ARCHITECTURE + "\n### A002:E001 — Use pandas\n- **Decision** : pandas.\n"
+        "- **Covers** : E001\n- **Status** : ❌ Rejected\n",
+        encoding="utf-8",
+    )
+    code = check_sdlc.check_traceability(project, phase="plan")
+    out = capsys.readouterr().out
+    assert code == 0, out
+    assert "A002" not in out, out
+
+
+@pytest.mark.skipif(not shutil.which("pwsh"), reason="pwsh not available")
+def test_bootstrap_normalizes_a_mixed_case_tier(tmp_path):
+    """Inspection REV-004: PowerShell accepts -Tier Full; the config must still hold 'full'."""
+    project = tmp_path / "demo-project"
+    project.mkdir()
+    result = subprocess.run(
+        [shutil.which("pwsh") or "pwsh", "-NoProfile", "-File", str(SCRIPTS_DIR / "deploy_init.ps1"),
+         "-ProjectRoot", str(project), "-Tier", "Full"],
+        capture_output=True, text=True, encoding="utf-8", errors="replace", check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    config = json.loads((project / "SDLC_PM" / "sdlc-config.json").read_text(encoding="utf-8"))
+    assert config["documentation_tier"] == "full"

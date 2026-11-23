@@ -102,6 +102,7 @@ Lives at `SDLC_PM/sdlc-config.json` in the user's project, validated by
 | `model_profile` | budget / balanced / quality / inherit | Default model tier |
 | `auto_approve` | true / false | Skips Y/N confirmations |
 | `asvs_level` | 0 / 1 / 2 / 3 | ASVS level applied (0 = disabled) |
+| `scan_roots` | list of folders (relative to the project root) | Deliverable code scanned by the AQ Gate's ASVS scan (default: the project root). Set it when `SDLC_PM/` does not sit with the deliverable |
 | `wave_parallelism` | true / false | Parallel execution by waves |
 | `wave_worktrees` | auto / on / off | Per-task git worktrees for parallel waves (`auto` = only when a write conflict is declared) |
 | `fresh_context_per_task` | true / false | Spawn one subagent per P### via the Agent tool |
@@ -126,7 +127,7 @@ Full example: `assets/sdlc-config.example.json`.
 | `/sdlc:dev [--auto-approve]` | Implementation | code + commits + `4_tests.md` (T###) |
 | `/sdlc:gate` | AQ Gate | exit 0 / 1 |
 | `/sdlc:exit` | Checkpoint | `SDLC_CHECKPOINT.md` |
-| `/sdlc:resume` | Resumption | continues from the checkpoint |
+| `/sdlc:resume` | Resumption | continues from the checkpoint (falls back to `HANDOFF.md`) |
 | `/sdlc:import <path>` | Audit | report + rebuilt `SDLC_PM/` |
 | `/sdlc:report [version]` | Summary | markdown report |
 | `/sdlc:status` | Current state | task dashboard |
@@ -243,8 +244,13 @@ v3+ checks:
 - `ID:PARENT` format (A###:E###, P###:A###, T###:P###)
 - Consistent `wave: N` field (no cycle, no dependency on the same or a later wave)
 - Valid `sdlc-config.json` schema
-- ASVS scan (delegated sub-skill) when `asvs_level >= 1`
+- ASVS scan (delegated sub-skill) when `asvs_level >= 1`, over the project root or each `scan_roots` folder
 - No active blocker (`🚫` or `[B]` in the .md files)
+- At `--phase release`, tiers `full`/`exhaustive`: a ✅ P### needs a ✅ T### pointing to it (legacy config: warning)
+
+`--version vX.Y.Z` checks that version folder instead of the newest; `--sdlc-dir <folder>` reads
+another SDLC folder than `<project-root>/SDLC_PM` (gate only: `deploy_init` and the commands still
+use `SDLC_PM/`).
 
 ### Traceability (reference: `references/traceability.md`)
 
@@ -304,7 +310,7 @@ explicit recommendation. `2_5_discussion.md` feeds the A### of phase 2 directly.
    - an initial `**wave**` field (`wave_planner.py` may recompute it)
    - a `**Depends on**` field listing prerequisite P###
    - a `**Target files**` field (declared write-set)
-   - a `**Status**` field
+   - a `**Status**` field, created ⬜ (✅ only once its T### passed, whatever the command)
    - Size S/M/L
    - the language, if multi-stack
 3b. Retired tasks: for each P### retired from a superseded A###, remove its T### from
@@ -332,7 +338,9 @@ See `references/code-lock.md` and `references/auto-approve.md`. Workflow:
       - otherwise → before marking 🚫, state the root-cause hypothesis and the evidence
         in the task notes, then mark 🚫 and escalate to the user (except in --auto-approve,
         where the run stops)
-4. Update 3_conception.md (✅/🔁/🚫 statuses).
+4. Update 3_conception.md (✅/🔁/🚫 statuses), one P### at a time, anchored on its ID column
+   (regex ^\| P007 \|) and its #### P007: section; never a bulk replace on the bare ID, which
+   also hits rows that cite it in Depends on. ✅ only once its T### passed.
 5. Update STATE.md through the file lock (lockfile_helper) to avoid races.
 6. When every P### in the wave is ✅ → next wave.
 7. When every wave is ✅ → /sdlc:gate.
@@ -340,6 +348,13 @@ See `references/code-lock.md` and `references/auto-approve.md`. Workflow:
 
 Delegate only sizeable, independent work to subagents (one P### per subagent here); do the rest
 inline, and do not spawn subagents to double-check your own work. Respect `max_parallel_agents`.
+
+**Rule changes.** When a P### (or a plan edit) changes a decision rule, grep every consumer of
+the old rule before calling it done: callers of the changed helper, code that re-implements the
+same predicate, and documentation contracts (references, templates, agent Input/Task sections).
+Search for the old condition's key terms, not only the sentence being edited. Route the consumers
+through one shared function when possible; otherwise add a test that pins them to the same answer
+on the same input.
 
 ### Phase 4 — Tests (part of `/sdlc:dev`)
 
@@ -396,7 +411,8 @@ statuses in `3_conception.md` plus `STATE.md`.
 
 ## Diagnostics / observability
 
-- **`/sdlc:status`**: markdown dashboard of P### per wave + statuses
+- **`/sdlc:status`**: markdown dashboard of P### per wave + statuses, cross-checked against the
+  `SDLC_PM/v*/` folders on disk, not only `SDLC_PLAN.md` (see `references/slash-commands.md`)
 - **`SDLC_PM/STATE.md`**: raw state, updated by subagents (mutex via `lockfile_helper.py`)
 - **`SDLC_PM/SDLC_CHECKPOINT.md`**: created by `/sdlc:exit`, consumed by `/sdlc:resume`
 

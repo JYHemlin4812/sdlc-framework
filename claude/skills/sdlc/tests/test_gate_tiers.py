@@ -1009,7 +1009,9 @@ def test_bpse_superseded_decision_passes_the_full_gate(tmp_path, capsys):
         encoding="utf-8",
     )
     (vdir / "4_tests.md").write_text(
-        FILLED_TESTS + "\n### T002:P002 — Streams a large file\n- **Target** : P002\n",
+        # T001 passed: a ✅ P### needs a passed T### at release (observation 0003).
+        FILLED_TESTS + "- **Status** : ✅\n"
+        + "\n### T002:P002 — Streams a large file\n- **Target** : P002\n",
         encoding="utf-8",
     )
     code = check_sdlc.check_traceability(project)
@@ -1335,3 +1337,197 @@ def test_bootstrap_normalizes_a_mixed_case_tier(tmp_path):
     assert result.returncode == 0, result.stdout + result.stderr
     config = json.loads((project / "SDLC_PM" / "sdlc-config.json").read_text(encoding="utf-8"))
     assert config["documentation_tier"] == "full"
+
+
+# --- Observation 0002: explicit version and SDLC folder ----------------------
+
+
+def test_explicit_version_is_checked_instead_of_the_newest(tmp_path, capsys):
+    project = make_project(tmp_path / "p", "standard", chain="standard")
+    (project / "SDLC_PM" / "v2.0.0").mkdir()  # newest folder, empty: the default run fails on it
+    assert check_sdlc.check_traceability(project) == 1
+    capsys.readouterr()
+    code = check_sdlc.check_traceability(project, version="v1.0.0")
+    out = capsys.readouterr().out
+    assert code == 0, out
+    assert "Version: v1.0.0" in out, out
+
+
+@pytest.mark.parametrize("version", ["v9.9.9", "latest", "1.0.0"])
+def test_unknown_or_malformed_version_is_an_error(tmp_path, capsys, version):
+    project = make_project(tmp_path / "p", "standard", chain="standard")
+    code = check_sdlc.check_traceability(project, version=version)
+    out = capsys.readouterr().out
+    assert code == 1 and "not found" in out, out
+
+
+def test_sdlc_dir_other_than_sdlc_pm_is_read(tmp_path, capsys):
+    project = make_project(tmp_path / "p", "standard", chain="standard")
+    (project / "SDLC_PM").rename(project / "SDLCv3_PM")
+    assert check_sdlc.check_traceability(project) == 1  # no SDLC_PM, no silent fallback
+    capsys.readouterr()
+    code = check_sdlc.check_traceability(project, sdlc_dir=project / "SDLCv3_PM")
+    out = capsys.readouterr().out
+    assert code == 0 and "AQ PASS" in out, out
+
+
+def test_cli_accepts_version_and_sdlc_dir():
+    args = check_sdlc._parse_args(["--version", "v1.2.0", "--sdlc-dir", "SDLCv3_PM"])
+    assert args.version == "v1.2.0" and args.sdlc_dir == Path("SDLCv3_PM")
+
+
+# --- Observation 0022: scanned roots of the deliverable ------------------------
+
+
+@pytest.mark.parametrize("value, valid", [([], False), ("src", False), ([""], False), (["../code"], True)])
+def test_scan_roots_schema(value, valid):
+    errors: list[str] = []
+    check_sdlc.validate_config_schema({"version": "4.0", "scan_roots": value}, errors)
+    assert (not any("scan_roots" in e for e in errors)) == valid, errors
+
+
+def _with_scan_roots(project: Path, roots: list[str]) -> None:
+    path = project / "SDLC_PM" / "sdlc-config.json"
+    config = json.loads(path.read_text(encoding="utf-8"))
+    config["scan_roots"] = roots
+    path.write_text(json.dumps(config), encoding="utf-8")
+
+
+def test_scan_roots_point_the_asvs_scan_at_the_deliverable(tmp_path, capsys):
+    project = make_project(tmp_path / "clone", "standard", asvs=1, chain="standard")
+    (project / "upstream.py").write_text("ev" + "al(input())\n", encoding="utf-8")  # third-party code
+    deliverable = tmp_path / "deliverable"
+    deliverable.mkdir()
+    (deliverable / "main.py").write_text("print('ok')\n", encoding="utf-8")
+    assert check_sdlc.check_traceability(project) == 1  # default: the clone root is scanned
+    capsys.readouterr()
+    _with_scan_roots(project, ["../deliverable"])
+    code = check_sdlc.check_traceability(project)
+    out = capsys.readouterr().out
+    assert code == 0, out
+    assert "scan root:" in out and "deliverable" in out, out
+
+
+def test_missing_scan_root_is_an_error(tmp_path, capsys):
+    project = make_project(tmp_path / "p", "standard", asvs=1, chain="standard")
+    _with_scan_roots(project, ["missing"])
+    code = check_sdlc.check_traceability(project)
+    out = capsys.readouterr().out
+    assert code == 1 and "scan root not found" in out, out
+
+
+# --- Observation 0003: a ✅ P### needs a passed T### at release ---------------
+
+
+def _full_with_statuses(tmp_path, conception: str, tests: str) -> Path:
+    project = make_project(tmp_path / "p", "full", asvs=1, chain="strict")
+    vdir = project / "SDLC_PM" / "v1.0.0"
+    (vdir / "3_conception.md").write_text(conception, encoding="utf-8")
+    (vdir / "4_tests.md").write_text(tests, encoding="utf-8")
+    return project
+
+
+def test_done_task_without_passed_test_fails_at_release(tmp_path, capsys):
+    project = _full_with_statuses(
+        tmp_path, FILLED_CONCEPTION_WITH_A + "- **Status** : ✅\n", FILLED_TESTS
+    )
+    code = check_sdlc.check_traceability(project)
+    out = capsys.readouterr().out
+    assert code == 1 and "P001 is marked done" in out, out
+    assert check_sdlc.check_traceability(project, phase="plan") == 0  # 4_tests.md not read at plan
+
+
+def test_done_task_with_passed_test_passes(tmp_path, capsys):
+    project = _full_with_statuses(
+        tmp_path, FILLED_CONCEPTION_WITH_A + "- **Status** : ✅\n", FILLED_TESTS + "- **Status** : ✅\n"
+    )
+    code = check_sdlc.check_traceability(project)
+    out = capsys.readouterr().out
+    assert code == 0, out
+
+
+def test_done_row_is_read_on_its_id_column_not_on_depends_on(tmp_path, capsys):
+    conception = (
+        FILLED_CONCEPTION_WITH_A
+        + "\n#### P002:A001 — Export rows\n- **wave** : 2\n- **Description** : Export.\n"
+        "- **Depends on** : P001\n\n"
+        "| ID | Title | Wave | Parent | Depends on | Status |\n|---|---|---|---|---|---|\n"
+        "| P001 | parse | 1 | A001 | — | ⬜ |\n"
+        "| P002 | export | 2 | A001 | P001 | ✅ |\n"
+    )
+    tests = FILLED_TESTS + "\n### T002:P002 — Export works\n- **Target** : P002\n"
+    project = _full_with_statuses(tmp_path, conception, tests)
+    code = check_sdlc.check_traceability(project)
+    out = capsys.readouterr().out
+    assert code == 1 and "P002 is marked done" in out, out
+    assert "P001 is marked done" not in out, out
+
+
+def test_passed_test_table_row_counts(tmp_path, capsys):
+    tests = (
+        FILLED_TESTS
+        + "\n| ID | Title | Parent | Type | Status |\n|---|---|---|---|---|\n"
+        "| T001 | parse rows | P001 | unit | ✅ |\n"
+    )
+    project = _full_with_statuses(tmp_path, FILLED_CONCEPTION_WITH_A + "- **Status** : ✅\n", tests)
+    code = check_sdlc.check_traceability(project)
+    out = capsys.readouterr().out
+    assert code == 0, out
+
+
+def test_done_task_without_passed_test_is_a_warning_on_legacy_and_ignored_at_standard(tmp_path, capsys):
+    legacy = make_project(tmp_path / "legacy", None, chain="strict")
+    (legacy / "SDLC_PM" / "v1.0.0" / "3_conception.md").write_text(
+        FILLED_CONCEPTION_WITH_A + "- **Status** : ✅\n", encoding="utf-8"
+    )
+    code = check_sdlc.check_traceability(legacy)
+    out = capsys.readouterr().out
+    assert code == 0 and "⚠️ P001 is marked done" in out, out
+    standard = make_project(tmp_path / "standard", "standard", chain="standard")
+    (standard / "SDLC_PM" / "v1.0.0" / "3_conception.md").write_text(
+        FILLED_CONCEPTION_E_ONLY + "- **Status** : ✅\n", encoding="utf-8"
+    )
+    code = check_sdlc.check_traceability(standard)
+    out = capsys.readouterr().out
+    assert code == 0 and "marked done" not in out, out
+
+
+# --- Glossary: glossary.md at SDLC_PM root -----------------------------------
+
+
+def test_glossary_missing_is_a_warning_at_full(tmp_path, capsys):
+    project = make_project(tmp_path / "p", "full", asvs=1, chain="strict", fill=True)
+    code = check_sdlc.check_traceability(project, phase="plan")
+    out = capsys.readouterr().out
+    assert code == 0, out
+    assert "glossary.md missing" in out, out
+
+
+def test_glossary_template_lines_are_errors(tmp_path, capsys):
+    project = make_project(tmp_path / "p", "full", asvs=1, chain="strict", fill=True)
+    shutil.copy(ASSETS / "glossary.template.md", project / "SDLC_PM" / "glossary.md")
+    code = check_sdlc.check_traceability(project, phase="plan")
+    out = capsys.readouterr().out
+    assert code == 1, out
+    assert "Unfilled template placeholder in glossary.md" in out, out
+
+
+def test_filled_glossary_passes_without_glossary_warning(tmp_path, capsys):
+    project = make_project(tmp_path / "p", "full", asvs=1, chain="strict", fill=True)
+    (project / "SDLC_PM" / "glossary.md").write_text(
+        "# Glossary\n\n| Term | Definition | Also called |\n|---|---|---|\n"
+        "| Lot | Un achat chez un encanteur | — |\n",
+        encoding="utf-8",
+    )
+    code = check_sdlc.check_traceability(project, phase="plan")
+    out = capsys.readouterr().out
+    assert code == 0, out
+    assert "glossary.md" not in out, out
+
+
+def test_glossary_is_not_required_at_standard(tmp_path, capsys):
+    project = make_project(tmp_path / "p", "standard", chain="standard", fill=True)
+    code = check_sdlc.check_traceability(project)
+    out = capsys.readouterr().out
+    assert code == 0, out
+    assert "glossary.md missing" not in out, out

@@ -107,6 +107,7 @@ indicative deliverable is proved by the commands and results quoted in it, never
 | ASVS scan (`asvs_level >= 1`) | Verified by the gate |
 | A### status `Proposed — auto-approve` | Verified by the gate (non-blocking warning) |
 | Unfinished P### of a superseded or rejected A### | Verified by the gate (error) |
+| ✅ P### without a passed T### (`--phase release`) | Verified by the gate (error at `full`/`exhaustive`; legacy config: warning) |
 | P### under a replacing A### still `Proposed` | Verified by the gate (error; under auto-approve: warning) |
 | Test coverage against `test_coverage_min` | Indicative |
 | "Boundaries & dependencies" section, contracts (`sdlc-architecture`, `sdlc-contract`) | Indicative (proved by their dependency check and contract tests, as T###) |

@@ -43,8 +43,9 @@ See the template `assets/2_5_discussion.template.md`. Write the content in the p
 
 ### Options considered
 
-#### Option A — <name>
+#### Option A — <name> (simplest viable baseline)
 - Description, pros, cons, size, risk
+- Every other option must beat it on a named criterion
 
 #### Option B — <name>
 - ...
@@ -61,6 +62,8 @@ See the template `assets/2_5_discussion.template.md`. Write the content in the p
 - Derived A###:E###
 
 ### Open questions / residual risks
+- Blocking: must be answered before the A### is written
+- Reversible: assumption taken for now, cheap to change later
 ```
 
 Match the document's length to what the decision needs; no filler sections, redundant summaries

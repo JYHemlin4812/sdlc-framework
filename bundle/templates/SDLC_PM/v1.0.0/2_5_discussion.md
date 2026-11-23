@@ -33,7 +33,10 @@ involved.
 
 ### Options considered
 
-#### Option A — `<name>`
+Option A is always the **simplest viable option**: the baseline every other option must beat on
+a named criterion. Do not impose a new architecture to fill the template.
+
+#### Option A — `<name>` (simplest viable baseline)
 
 - **Description** : `<actionable sentence>`
 - **Pros** :
@@ -86,7 +89,8 @@ This discussion becomes the following **A###**:
 
 ### Open questions / residual risks
 
-- ❓ `<question still open>`
+- ❓ **Blocking** : `<question that must be answered before the A### is written>`
+- ❓ **Reversible** : `<assumption taken for now, cheap to change later>`
 - ⚠️ `<risk the recommendation may not address>`
 
 ---
@@ -108,7 +112,8 @@ This discussion becomes the following **A###**:
 
 ## Discussion phase checklist (optional)
 
-- [ ] Each topic has at least 2 options considered
+- [ ] Each topic has at least 2 options considered, Option A being the simplest viable one
+- [ ] Open questions split into blocking and reversible
 - [ ] Trade-offs documented
 - [ ] Explicit recommendation with its rationale
 - [ ] Clear link to the A### to produce in `2_architecture.md`

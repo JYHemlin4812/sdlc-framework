@@ -18,10 +18,13 @@ argument-hint: "[project-root]"
 2. Confirm the proposed tier (it can be edited by hand after init).
 3. **Ask for the output language** (`output_language`): the language for artifacts and messages.
    Propose the language the user writes in as the default.
-4. Run `~/.claude/skills/sdlc/scripts/deploy_init.ps1` (Windows) or `deploy_init.sh`.
-   The script creates every skeleton file; you then decide which ones the tier requires.
-5. Write `"version": "4.0"`, `output_language`, `documentation_tier` and `project_size_estimate`
-   to `SDLC_PM/sdlc-config.json`. Do this after step 4, because the script copies the example
+4. Run `~/.claude/skills/sdlc/scripts/deploy_init.ps1 -Tier <tier>` (Windows) or
+   `deploy_init.sh <project-root> --tier <tier>`. The script creates only the files of that tier
+   (minimal: HANDOFF + RESUME + config; standard: + 0_context, 1_elicitation, 3_conception;
+   full/exhaustive: + 2_architecture, 2_5_discussion, 4_tests) and writes the tier and the
+   project name to the config.
+5. Write `"version": "4.0"`, `output_language` and `project_size_estimate` to
+   `SDLC_PM/sdlc-config.json`. Do this after step 4, because the script copies the example
    config over it. Also set `asvs_level` to match the tier: `full` needs 1 or more, `exhaustive`
    needs 2. The example config ships with 1, and the AQ Gate rejects `exhaustive` below 2
    (inspection 7, R04).

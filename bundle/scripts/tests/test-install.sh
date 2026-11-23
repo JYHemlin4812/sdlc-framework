@@ -129,7 +129,7 @@ at "C0. commands sourced from top-level commands/sdlc" has "$SRC" 'commands/sdlc
 at "C0. commands NOT from the embedded copy"         hasnot "$SRC" 'skills/sdlc/commands/sdlc'
 
 # =======================================================================
-# (C1) real ref: DERIVED floors 11 / 12 / 19 (read-only)
+# (C1) real ref: DERIVED floors 14 / 12 / 19 (read-only)
 # =======================================================================
 printf -- '-- (C1) derived floors on the real ref (read-only) --\n'
 realRef="$(cd "$scriptsDir/../.." && pwd)/claude"
@@ -139,12 +139,34 @@ if [[ -d "$realRef" ]]; then
     realCmd=$(printf '%s\n' "$realGreen" | grep -c '^commands/sdlc/')
     realAgents=$(printf '%s\n' "$realGreen" | grep -c '^agents/')
     realCore=$(printf '%s\n' "$realGreen" | grep -cx 'NESTOR.md')
-    ae "C1. real ref: 11 sdlc* skills (derived)"     11 "$realSkills"
+    ae "C1. real ref: 14 sdlc* skills (derived)"     14 "$realSkills"
     ae "C1. real ref: 19 commands (derived)"         19 "$realCmd"
     ae "C1. real ref: 12 agents (sdlc-*, derived)"   12 "$realAgents"
     ae "C1. real ref: 0 NESTOR.md core (outside the SDLC domain)" 0 "$realCore"
 else
     printf '  (C1 skipped: real ref not found at %s)\n' "$realRef"
+fi
+
+# =======================================================================
+# (C1b) real ref deployed into an isolated live: the skills merged from BPSE
+# and their supporting files arrive; a foreign skill is left untouched.
+# =======================================================================
+printf -- '-- (C1b) real ref installed into an isolated live --\n'
+if [[ -d "$realRef" ]]; then
+    CASE_LIVE="$WORK/c1b/live"
+    mkdir -p "$CASE_LIVE/skills/se-tdd"
+    printf 'foreign skill\n' > "$CASE_LIVE/skills/se-tdd/SKILL.md"
+    run_install --source-root "$realRef" --claude-root "$CASE_LIVE"
+    at "C1b. sdlc-delivery skill deployed"              live_has 'skills/sdlc-delivery/SKILL.md'
+    at "C1b. sdlc-architecture messaging checklist"    live_has 'skills/sdlc-architecture/references/messaging.md'
+    at "C1b. sdlc-contract contract sheet"             live_has 'skills/sdlc-contract/assets/contract.md'
+    at "C1b. 5_delivery template deployed"             live_has 'skills/sdlc/assets/5_delivery.template.md'
+    at "C1b. SOURCES.md deployed"                      live_has 'skills/sdlc/SOURCES.md'
+    ae "C1b. live sdlc* skills == 14"                  14 "$(get_sync_domain_skill "$CASE_LIVE" | grep -c .)"
+    read_raw_into foreign1b "$CASE_LIVE/skills/se-tdd/SKILL.md"
+    ae "C1b. foreign skill outside the domain untouched" "foreign skill"$'\n' "$foreign1b"
+else
+    printf '  (C1b skipped: real ref not found at %s)\n' "$realRef"
 fi
 
 # =======================================================================

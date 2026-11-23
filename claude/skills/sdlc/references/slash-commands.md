@@ -41,6 +41,12 @@ template headings and field markers stay in English.
 
 See `references/discussion-phase.md`. Optional.
 
+**Decision questions**: when the discussion is put to the user as choices, the options mirror the
+evaluated options of `2_5_discussion.md` one to one, with the same letters. An option raised while
+asking is labelled "new, not evaluated" and, if chosen, goes back to the facilitator before it is
+recorded. Before a question that changes a rule, list the approved-plan sections and existing
+states the rule touches and state, in each option, what happens to them.
+
 **Agent involved**: `sdlc-discussion-facilitator` (subagent, spawned via the Agent tool)
 
 ---
@@ -57,11 +63,16 @@ See `references/discussion-phase.md`. Optional.
      tool, model resolved from the profile). Input: `1_elicitation.md` + `2_5_discussion.md` (if
      present). Output: `2_architecture.md` (A###:E### + ADR + ASCII diagram).
    - Tier `standard`: skip the architect unless the user asks for an architecture document.
+1b. Decision acceptance (orchestrator): ask the user about each new **Proposed** A###, set
+   **Accepted** / **Rejected** on the explicit answer and record it in `HANDOFF.md`; an accepted
+   replacement marks the old A### **Superseded**. Under `--auto-approve`, list the pending A###.
 2. Spawn `sdlc-system-analyst` (Agent tool):
    - Input: `2_architecture.md` when written A### exist; otherwise `1_elicitation.md` (standard
      tier without architecture)
    - Output: `3_conception.md` with `**Depends on**`, `**Target files**`, `**Status**`. Parent:
      `P###:A###` when written A### exist, `P###:E###` only when none exists.
+2b. Retired tasks (orchestrator): remove the T### of every retired P### from `4_tests.md` and
+   its entry from `STATE.md` (under the `lockfile_helper.py` mutex).
 3. Run `wave_planner.py --conception ... --annotate` to compute/annotate the `**wave**` fields
 4. Run `check_sdlc.py --phase plan` once, here (AQ Gate for planning; `4_tests.md` is not written
    yet). The agents do not run it themselves.
@@ -78,6 +89,13 @@ See `references/discussion-phase.md`. Optional.
 Asks for `output_language` (default: the language the user writes in) and
 `project_size_estimate`, proposes a `documentation_tier`, then runs `scripts/deploy_init.ps1`
 (Windows) or `deploy_init.sh` (Linux/macOS).
+
+**Third-party clone.** Before running the script, if the target is a git repository, read
+`git remote -v`. When a remote is not the user's own (an upstream project, a fork's `upstream`),
+do not create `SDLC_PM/` there by default: warn the user and ask where the deliverable code will
+live, then initialize in that folder. The AQ Gate scans the folder holding `SDLC_PM/`, so upstream
+code would be judged as the deliverable. If `SDLC_PM/` must stay in the clone, set `scan_roots` in
+`sdlc-config.json` to the deliverable's folders. The scripts do not detect this case themselves.
 
 ---
 
@@ -101,7 +119,10 @@ when written, `3_conception.md`)
    - Otherwise: run inline
 4. Mutex via `lockfile_helper.py` when updating `STATE.md`
 5. On failure: retry with model escalation (if allowed), up to `max_retry_per_task`
-6. Update `3_conception.md` (✅/🔁/🚫) and `4_tests.md` (T### added)
+6. Update `3_conception.md` (✅/🔁/🚫) and `4_tests.md` (T### added). Change each status on its
+   own row (anchored on the ID column, `^\| P007 \|`) and in its own section, never by a bulk
+   replace on the bare ID (it also hits rows citing the ID in Depends on). ✅ only after its T###
+   passed; the release gate rejects a ✅ P### without a passed T### at tiers `full`/`exhaustive`
 7. Wave finished → next wave. All waves finished → `/sdlc:gate`.
 
 Spawn one subagent per P###; do not spawn subagents for work doable in a handful of tool calls,
@@ -121,7 +142,26 @@ nor to double-check your own work.
 **Output**: exit 0 / 1 + markdown report
 **Precondition**: none
 
-Runs `scripts/check_sdlc.py` directly. See `references/aq-gate.md`.
+Runs `scripts/check_sdlc.py` directly. See `references/aq-gate.md`. To check a version other
+than the newest, or an SDLC folder other than `SDLC_PM/`, pass `--version vX.Y.Z` and
+`--sdlc-dir <folder>`.
+
+---
+
+## `/sdlc:finish`
+
+**Phase**: 5 (Delivery) + branch close-out
+**Output**: `5_delivery.md` (tier `full`+), then a logged integration decision
+**Precondition**: `/sdlc:gate` exit 0 on the last wave
+
+**Workflow**:
+1. Step 0 of `sdlc-finish`: delivery prerequisite. At tier `full` and above,
+   `SDLC_PM/v<X>/5_delivery.md` must exist and be filled; otherwise run `sdlc-delivery` first.
+   Below `full`, run the `sdlc-delivery` checklist into the PR body.
+2. Run the test suite and quote the result.
+3. Present the options (local merge, PR, keep, discard); destructive ones need a typed
+   confirmation. Preparing the delivery authorizes no merge, push or deployment.
+4. Log the decision in `HANDOFF.md` ("Revisions").
 
 ---
 
@@ -157,10 +197,17 @@ with `scripts/stow_decay.py`.
 
 ## `/sdlc:resume`
 
-**Precondition**: `SDLC_CHECKPOINT.md` present
+**Precondition**: `SDLC_CHECKPOINT.md` present, or else `HANDOFF.md` (fallback below)
 
 Reads the checkpoint, restores the conceptual state and proposes the next action (resume dev at
 the recorded wave/P###, or a new phase if the checkpoint is older).
+
+**Fallback when `SDLC_CHECKPOINT.md` is absent** (a session that ended without `/sdlc:exit`, the usual
+case after a gate ✅): say in one line that the checkpoint is missing, then restore from `HANDOFF.md`
+(Technical metadata, Next 3 actions, Pending decisions). Compare the date of `HANDOFF.md` with the
+modification dates of the current version's artefacts: if an artefact is newer, state that the
+handoff may be stale and confirm the next action with the user before resuming. Refuse only when
+neither file exists.
 
 ---
 
@@ -200,6 +247,12 @@ Quick markdown dashboard:
 - T###: ✅ / ❌ (counts + coverage)
 - Last action + timestamp
 
+`SDLC_PLAN.md`, `STATE.md` and the checkpoint are hand-kept indexes: cross-check them with the
+artefacts. List the `SDLC_PM/v*/` folders, take the newest by number (`v10.0.0` after `v9.0.0`),
+and read the summary table of its `3_conception.md`. Report any version folder missing from
+`SDLC_PLAN.md` and any P### not ✅ in it. Never report "no cycle open" while one of them holds an
+unfinished P###.
+
 ---
 
 ## `/sdlc:todo`
@@ -225,7 +278,8 @@ context. Useful in interactive mode.
 
 Runs `sdlc-asvs-auditor` (sub-skill):
 1. Reads `asvs_level` from `sdlc-config.json` (default 1)
-2. Runs `asvs_scanner.py --level <n> --root <project>`
+2. Runs `asvs_scanner.py --level <n> --root <project>` (once per `scan_roots` folder when the
+   config sets it: the scanner does not read `scan_roots` itself)
 3. Produces a report grouped by ASVS category, severity, file:line
 4. For high-severity findings not documented in `4_tests.md` or `2_5_discussion.md` → suggest
    `/sdlc:fix` or a new E###.

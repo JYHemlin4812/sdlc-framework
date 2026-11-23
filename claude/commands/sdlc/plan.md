@@ -17,9 +17,20 @@ Write artifact content and user-facing messages in the project's `output_languag
    (REV-003, option a): skip `sdlc-architect` unless the user asks for an architecture document. At tier
    `full` or `exhaustive` (and for legacy configs without a tier), always spawn `sdlc-architect` (Agent tool) to produce `2_architecture.md`
    (A###:E###, ADRs, ASCII diagram).
+1b. Decision acceptance (you, not the architect): present the new **Proposed** A### to the user and
+   set **Accepted** or **Rejected** in `2_architecture.md` only on the user's explicit answer;
+   record each answer in the "Revisions" section of `HANDOFF.md`. When an accepted A### has a
+   **Supersedes** field, mark the A### it names **Superseded by A###** now, then retire or
+   re-parent that decision's unfinished P### (step 2). A rejected replacement leaves the old A###
+   in force. When the user rejects an A### that already has unfinished P###, retire or re-parent
+   them too (step 2b): the gate fails while one remains. Under `--auto-approve`, the architect wrote **Proposed — auto-approve**: list those
+   A### in `HANDOFF.md` as pending; no supersession takes effect until the user accepts.
 2. Spawn `sdlc-system-analyst` (Agent tool) to produce `3_conception.md`. Parent rule: `P###:A###` when
    written A### exist in `2_architecture.md`; `P###:E###` only when no A### exists (standard tier without
    architecture). Never `P###:E###` when A### exist: that breaks the traceability chain.
+2b. Retired tasks (you, not the analyst): for each P### the analyst retired, remove its T### from
+   `4_tests.md` and its entry from `STATE.md` (take the mutex through `lockfile_helper.py`), so
+   neither the release gate nor the wave orchestrator still sees it.
 3. Run `wave_planner.py --conception ... --annotate` to compute and annotate the `wave: N` values.
 4. Run `check_sdlc.py --phase plan` once, after steps 1 to 3 (AQ Gate for the planning phase: `4_tests.md`
    is not written yet). Only this run checks the planning documents; the agents do not run it themselves.

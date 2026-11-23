@@ -5,8 +5,9 @@
 > English so the tooling can parse them.
 
 > SDLC phase 4. Describes the **T###:P###** test cases that validate each
-> P### task. Target coverage (configurable via `test_coverage_min`): 70% by
-> default.
+> P### task. Coverage target: the project's `test_coverage_min` (70% by
+> default), an indicator rather than a universal quota; the AQ Gate does not
+> measure it.
 
 ---
 
@@ -28,6 +29,11 @@
 | Security | `asvs_scanner.py` | ASVS L`<n>` findings | Before the gate |
 | End-to-end | `<...>` | user scenarios | Before release |
 
+Choose the lowest level that really observes the risk. Unit tests use the real domain objects
+(test doubles only at I/O boundaries); integration tests exercise the real adapter (a mocked
+database does not prove the SQL); end-to-end tests are kept for critical journeys. Control the
+clock and randomness, make time zones explicit, isolate data.
+
 ---
 
 ## Test cases (T###)
@@ -43,6 +49,10 @@
   - `<null / empty input>`
   - `<maximum input>`
   - `<invalid input>`
+- **Level rationale** : `<why this level observes the risk>`
+- **RED** : observed | characterization | written-after
+- **Command run** : `<exact command and result>`
+- **Not run** : `<none, or the check not run and why>`
 - **Status** : ⬜
 
 ### T002:P001 — `<title>`
@@ -92,7 +102,7 @@ Status legend: ⬜ To do · 🔄 In progress · ✅ Pass · ❌ Fail · 🔁 In 
 ## Phase 4 checklist
 
 - [ ] Every P### has at least one associated T###
-- [ ] Measured coverage ≥ `test_coverage_min` (default 70%)
+- [ ] Measured coverage compared with `test_coverage_min` (default 70%); any gap justified
 - [ ] Edge cases identified for every unit T###
 - [ ] ASVS security tests run if `asvs_level >= 1`
 - [ ] AQ Gate: `check_sdlc.py --phase plan` exit 0 (release at the end of the waves)

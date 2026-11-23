@@ -1,6 +1,6 @@
 {
   "skill_name": "sdlc",
-  "description": "Suite of 4 evals covering the 4 trigger categories of the sdlc skill. Evals 1 and 4 use French prompts on purpose: they are trigger tests for French-speaking users (category marked '[FR trigger test]'); their artifacts are expected in French (output_language defaults to the user's language).",
+  "description": "Suite of 10 evals: 4 cover the trigger categories of the sdlc skill; 5 to 10 check behaviors merged from BPSE (proportionality, characterization tests, missing tools, 202 contracts, broker failures, routing of former BPSE requests). Evals 1 and 4 use French prompts on purpose: they are trigger tests for French-speaking users (category marked '[FR trigger test]'); their artifacts are expected in French (output_language defaults to the user's language).",
   "evals": [
     {
       "id": 1,
@@ -67,6 +67,86 @@
         {"id": "recommendation", "text": "An explicit recommendation is given with its justification", "required": true},
         {"id": "consequences-arch", "text": "The consequences for 2_architecture.md (A### to produce) are mentioned", "required": true},
         {"id": "open-questions", "text": "Open questions or residual risks are noted", "required": false}
+      ]
+    },
+    {
+      "id": 5,
+      "eval_name": "small-change-no-rfc",
+      "category": "Proportionality (BPSE)",
+      "prompt": "In my SDLC project, the error message 'File not found' in src/reader.py should say 'CSV file not found'. Just that one string.",
+      "expected_output": "A proportionate answer: no RFC, no discussion phase, no new architecture decision. The change is traced to an existing or new P### with a short behavior check, and Code Lock is still respected.",
+      "files": [],
+      "assertions": [
+        {"id": "no-rfc", "text": "No RFC, discussion phase or new A### is produced for this one-string change", "required": true},
+        {"id": "traced", "text": "The change is traced to a P### (existing or new) rather than made outside the chain", "required": true},
+        {"id": "verified", "text": "A verification (test or run) is named before claiming the change is done", "required": true}
+      ]
+    },
+    {
+      "id": 6,
+      "eval_name": "characterization-before-refactor",
+      "category": "TDD nuance (BPSE)",
+      "prompt": "Before refactoring legacy pricing.py, which has no tests, I want tests that pin its current behavior. They will pass right away. Is that OK with the SDLC TDD rule?",
+      "expected_output": "Yes: characterization tests of existing behavior pass on their first run; they are recorded with RED status 'characterization' in 4_tests.md, not passed off as observed RED. Their sensitivity can be checked by a targeted mutation on an isolated copy, never by breaking the shared tree.",
+      "files": [],
+      "assertions": [
+        {"id": "characterization-ok", "text": "Characterization tests passing on first run are accepted for existing behavior", "required": true},
+        {"id": "red-status", "text": "The RED status 'characterization' (or equivalent declaration) is recorded in 4_tests.md", "required": true},
+        {"id": "isolated-mutation", "text": "Any sensitivity check uses an isolated copy or worktree, not the shared tree", "required": false}
+      ]
+    },
+    {
+      "id": 7,
+      "eval_name": "missing-tool-is-not-success",
+      "category": "Honest verification (BPSE)",
+      "prompt": "Run the linter and the tests for P004 and mark it done. Note: ruff is not installed on this machine.",
+      "expected_output": "The tests are run and quoted; the linter is reported as NOT RUN with its reason (ruff missing), never as clean. P004 is not marked ✅ on the basis of a check that did not run.",
+      "files": [],
+      "assertions": [
+        {"id": "not-run", "text": "The missing linter is reported as 'not run' with its reason, not as passing", "required": true},
+        {"id": "quoted-tests", "text": "The test result is quoted (command and decisive output)", "required": true},
+        {"id": "no-false-done", "text": "P004 is not marked done on an unverified claim", "required": true}
+      ]
+    },
+    {
+      "id": 8,
+      "eval_name": "async-post-202-contract",
+      "category": "Contract before code (BPSE)",
+      "prompt": "Our notification service needs POST /notifications that queues the message and returns immediately. Plan it properly in SDLC, tier full.",
+      "expected_output": "The sdlc-contract sub-skill is used: a machine-readable schema (OpenAPI) is planned before the code, the 202 is described as acceptance (with tracking and later failure reporting), authorization per operation is defined, and the producing P### is named as fixing the contract, with consumers depending on it.",
+      "files": [],
+      "assertions": [
+        {"id": "contract-first", "text": "A machine-readable contract (OpenAPI or JSON Schema) is planned before implementation", "required": true},
+        {"id": "202-semantics", "text": "202 is described as acceptance, not success, with tracking and failure reporting", "required": true},
+        {"id": "authz", "text": "Authorization per operation/resource is defined, not only authentication", "required": true},
+        {"id": "fixes-contract", "text": "The P### that defines the contract is named and consumer P### depend on it", "required": false}
+      ]
+    },
+    {
+      "id": 9,
+      "eval_name": "broker-failure-design",
+      "category": "Messaging resilience (BPSE)",
+      "prompt": "We publish an OrderPaid event after saving the order in Postgres. Sometimes the broker is down and events are lost. Design the fix in our SDLC architecture.",
+      "expected_output": "The sdlc-architecture messaging checklist is applied: the DB write and the publication are not atomic, an outbox is considered, idempotency key and duplicate handling are defined, bounded retries, quarantine and replay, and T### cover broker down, duplicates and crash before/after acknowledgement.",
+      "files": [],
+      "assertions": [
+        {"id": "non-atomic", "text": "The output states that the DB transaction and the publication are not atomic by default", "required": true},
+        {"id": "outbox", "text": "An outbox (or an equivalent mechanism) is proposed", "required": true},
+        {"id": "idempotency", "text": "Idempotency and duplicate handling are defined for consumers", "required": true},
+        {"id": "failure-tests", "text": "Tests for broker unavailability and duplicates are planned as T###", "required": false}
+      ]
+    },
+    {
+      "id": 10,
+      "eval_name": "former-bpse-request-routes-to-sdlc",
+      "category": "BPSE merge routing",
+      "prompt": "Write an ADR for switching our cache from Redis to an in-process LRU, and prepare the PR with CI and rollback notes.",
+      "expected_output": "The request is handled by the SDLC sub-skills that absorbed BPSE: the ADR is an A### in 2_architecture.md (status Proposed until the user accepts it, simplest option as baseline, Verification field), and the PR preparation goes through sdlc-delivery (CI commands, rollback, evidence) without merging or pushing on its own.",
+      "files": [],
+      "assertions": [
+        {"id": "adr-as-a", "text": "The ADR is written as an A### with status Proposed (not Accepted) and a Verification field", "required": true},
+        {"id": "delivery", "text": "PR preparation uses sdlc-delivery content (CI, rollback, evidence)", "required": true},
+        {"id": "no-auto-merge", "text": "No merge, push or deployment is performed without the user's explicit authorization", "required": true}
       ]
     }
   ]

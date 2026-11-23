@@ -105,7 +105,7 @@ sdlc-framework/
 
 | Catégorie | Nombre |
 |---|---|
-| Skills (`claude/skills/*/SKILL.md`) | 10 |
+| Skills (`claude/skills/*/SKILL.md`) | 14 |
 | Commandes (`claude/commands/sdlc/*.md`, `/sdlc:*`) | 18 |
 | Agents (`claude/agents/*.md`) | 12 |
 

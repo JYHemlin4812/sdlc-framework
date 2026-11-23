@@ -12,6 +12,13 @@ python skills/sdlc/scripts/check_sdlc.py
 pwsh skills/sdlc/scripts/check_sdlc.ps1 -Json
 ```
 
+Options: `--project-root <dir>` (default: current directory), `--sdlc-dir <dir>` (default:
+`<project-root>/SDLC_PM`; for example `SDLCv3_PM`), `--version vX.Y.Z` (default: the newest version
+folder; an absent or malformed name is exit 1), `--phase plan|release`, `--today YYYY-MM-DD`. The
+wrapper takes `-ProjectRoot`, `-SdlcDir` (relative to `-ProjectRoot`), `-Version`, `-Phase`,
+`-Today`. `--sdlc-dir` is a gate option only: `deploy_init` and the `/sdlc:*` commands still use
+`SDLC_PM/`.
+
 Equivalent slash command: `/sdlc:gate`.
 
 ## Exit codes
@@ -23,6 +30,20 @@ Equivalent slash command: `/sdlc:gate`.
 | 2 | ERROR | Invalid `sdlc-config.json` (JSON syntax). The PowerShell wrapper also exits 2 when Python or `check_sdlc.py` is missing |
 
 Warnings (lines starting with `⚠️`) do not change the exit code. The wrapper's JSON output lists them in `warnings`.
+Warnings: a HANDOFF older than 7 days; A### whose status is still `Proposed — auto-approve`
+(written under `--auto-approve`, not yet accepted by the user, with or without P###; see
+`auto-approve.md`); an A### in force with no P### yet; a replacing A### (`Supersedes`) still
+waiting for the user's acceptance, with no P### yet; with a legacy config (no tier), a ✅ P###
+without a passed T### at release (an error at `full`/`exhaustive`, see Phases). Status lines
+inside code blocks are examples and are ignored.
+
+Decision errors:
+- A P### that hangs from an A### marked `Superseded by A###` or `Rejected` and is not ✅. Retire it
+  from `3_conception.md` or re-parent it; finished P### stay as history.
+- A P### that hangs from a replacing A### (`Supersedes`) still plainly `Proposed`: the decision it
+  replaces stays in force until the user accepts the replacement. A `Proposed` A### without
+  `Supersedes` is not judged (the status predates this rule, so older projects keep passing).
+- An accepted replacing A### with no P###: the replacement would never be built.
 
 ## Checks by documentation tier
 
@@ -43,7 +64,9 @@ At every tier except `none` and absent, a template placeholder left unfilled is 
 
 `check_sdlc.py --phase plan` is the precondition of `/sdlc:dev`. It does not require `4_tests.md` yet: the tests are written during development. `--phase release` (the default) is the full check, run at the end of the waves and before a release.
 
-Version folders are compared by number: `v10.0.0` is newer than `v9.0.0`. Folders whose names do not match `vX.Y.Z` are ignored.
+Version folders are compared by number: `v10.0.0` is newer than `v9.0.0`. Folders whose names do not match `vX.Y.Z` are ignored. `--version vX.Y.Z` checks the named folder instead of the newest.
+
+At `--phase release`, tiers `full` and `exhaustive`: a P### marked done (✅ or `[D]`, in its `**Status**` field or in the last cell of its summary-table row, found by its ID column) needs at least one T### pointing to it marked passed (✅ or `[D]`, in its `T###:P###` section or its table row). Otherwise it is an error: set the P### back to 🔄 or record the passing test. With a legacy config (no tier) it is a warning; at `standard` T### are optional and nothing is checked.
 
 Test coverage is not measured by the gate. `test_coverage_min` is a project target, shown as an indicator in the configuration schema.
 
@@ -51,7 +74,7 @@ Test coverage is not measured by the gate. `test_coverage_min` is a project targ
 
 ### Inherited from v2
 
-1. `SDLC_PM/vX.X.X/` exists (the most recent one is checked)
+1. `SDLC_PM/vX.X.X/` exists (the most recent one is checked, or the one named by `--version`)
 2. `1_elicitation.md` is not empty and contains ≥ 1 E###
 3. Every A### declares an existing parent E### (`A###:E###`)
 4. Every P### declares an existing parent A### (`P###:A###`); at tier `standard` with no A###
@@ -73,7 +96,10 @@ Test coverage is not measured by the gate. `test_coverage_min` is a project targ
     wave (otherwise the DAG is invalid).
 11. **Cycle detection** in the P### DAG (Kahn's algorithm). A cycle → exit 1.
 12. **ASVS scan** when `asvs_level >= 1`: runs `sdlc-asvs-auditor/scripts/asvs_scanner.py`.
-    Undocumented high-severity findings → exit 1.
+    Undocumented high-severity findings → exit 1. The scan covers the project root, or each folder
+    of `scan_roots` in `sdlc-config.json` (relative to the project root) when `SDLC_PM/` does not
+    sit with the deliverable, e.g. in a third-party clone. Each scanned root is printed; a missing
+    one is an error.
 
 ## Report layout
 
@@ -141,6 +167,20 @@ Cause: a P### was marked 🚫 (failure after max retries) and has not been resol
 
 Fix: `/sdlc:fix <P###>` to retry, or remove the 🚫 by hand once the root cause has been analyzed
 and resolved.
+
+### P### is marked done (✅) but no T### pointing to it is marked passed
+
+Cause: the P### was set ✅ before its test passed, or a bulk status edit hit its row through a
+Depends on cell, or the task (deployment, configuration) has its evidence only in its status line.
+
+Fix: set the P### back to 🔄 until its T### passes; for a task without a code test, record the
+check that proves it as a `T###:P###` (command run, result) and mark that T### ✅.
+
+### ASVS scan root not found
+
+Cause: a `scan_roots` entry of `sdlc-config.json` does not exist, relative to the project root.
+
+Fix: correct the path, or remove `scan_roots` to scan the project root.
 
 ## Pre-commit hook (optional)
 

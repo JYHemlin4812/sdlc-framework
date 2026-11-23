@@ -74,6 +74,19 @@ file in `~/.claude/agents/` to override.
   (were `modifie-des-deux`, `modifie-live`, `ajoute-live`, `supprime-ref`). The installer now
   ends with `Installation complete` (was `Installation terminee`).
 
+## After v4.0: BPSE practices merged
+
+The engineering practices of BPSE (`se-*` skills) now live in the SDLC sub-skills
+`sdlc-architecture`, `sdlc-contract` and `sdlc-delivery`, and in the templates (see
+`claude/skills/sdlc/SOURCES.md`). Existing projects need no change:
+
+- New template fields (`Verification`, `Fixes contract`, RED status in `4_tests.md`) are
+  additions; documents written before them still pass the gate.
+- `5_delivery.md` is created by `sdlc-delivery` when needed (tier `full` and above), not by
+  `/sdlc:init`.
+- If BPSE is installed on the same machine, its `se-*` skills and the SDLC sub-skills cover the
+  same ground. Keep one: remove BPSE once the SDLC installation is verified.
+
 ## Rollback
 
 Check out the last v3.x commit of the repository and run the installer again; it backs up

@@ -6,9 +6,11 @@ Checks depend on `documentation_tier` in SDLC_PM/sdlc-config.json:
   - minimal    : HANDOFF.md and RESUME.md must exist and be filled; HANDOFF older
                  than 7 days is a warning
   - standard   : the minimal checks, plus E→P (A### and T### optional)
-  - full       : the minimal checks, plus strict E→A→P→T, and asvs_level >= 1
+  - full       : the minimal checks, plus strict E→A→P→T, and asvs_level >= 1;
+                 at --phase release, a ✅ P### needs a passed (✅) T###
   - exhaustive : as full, and asvs_level >= 2
-  - absent / legacy (no tier) : strict E→A→P→T, as in earlier versions
+  - absent / legacy (no tier) : strict E→A→P→T, as in earlier versions (a ✅ P###
+                 without a passed T### is only a warning)
 
 At every tier except none and legacy, unfilled template placeholders are errors.
 Test coverage is not measured by this gate.
@@ -141,9 +143,9 @@ def extract_waves(content: str) -> dict[str, int]:
     return waves
 
 
-def load_config(project_root: Path) -> dict:
-    """Load sdlc-config.json from SDLC_PM/. Return {} when absent."""
-    config_path = project_root / "SDLC_PM" / "sdlc-config.json"
+def load_config(project_root: Path, sdlc_dir: Path | None = None) -> dict:
+    """Load sdlc-config.json from the SDLC folder (default: SDLC_PM/). Return {} when absent."""
+    config_path = (sdlc_dir or project_root / "SDLC_PM") / "sdlc-config.json"
     if not config_path.exists():
         return {}
     try:
@@ -194,6 +196,17 @@ def validate_config_schema(config: dict, errors: list[str]) -> None:
             f"sdlc-config.json: invalid project_size_estimate {size!r}, "
             f"expected one of {sorted(SUPPORTED_PROJECT_SIZES)}"
         )
+    roots = config.get("scan_roots")
+    if roots is not None and not valid_scan_roots(roots):
+        errors.append(f"sdlc-config.json: scan_roots must be a non-empty list of paths, got {roots!r}")
+
+
+def valid_scan_roots(value: object) -> bool:
+    """`scan_roots` is a non-empty list of non-empty path strings (observation 0022)."""
+    return (
+        isinstance(value, list) and bool(value)
+        and all(isinstance(item, str) and item.strip() for item in value)
+    )
 
 
 def validate_waves(content_p: str, p_ids: set[str], errors: list[str]) -> dict[str, int]:
@@ -263,8 +276,15 @@ def detect_dag_cycles(content_p: str, waves: dict[str, int], errors: list[str]) 
         errors.append(f"Cycle detected in the P### DAG: {sorted(cycle_nodes)}")
 
 
-def run_asvs_scan(project_root: Path, level: int, errors: list[str]) -> None:
-    """Run asvs_scanner.py when asvs_level >= 1."""
+def run_asvs_scan(
+    project_root: Path, level: int, errors: list[str], scan_roots: list[str] | None = None
+) -> None:
+    """Run asvs_scanner.py when asvs_level >= 1, once per scanned root.
+
+    The scanned roots are the project root, or each `scan_roots` entry of sdlc-config.json
+    (relative to the project root) when the deliverable is not the folder holding SDLC_PM
+    (observation 0022). A missing root is an error, never a silent skip.
+    """
     if level <= 0:
         return
     scanner = Path(__file__).parent.parent.parent / "sdlc-asvs-auditor" / "scripts" / "asvs_scanner.py"
@@ -273,22 +293,35 @@ def run_asvs_scan(project_root: Path, level: int, errors: list[str]) -> None:
         return
     import subprocess
 
-    try:
-        result = subprocess.run(
-            [sys.executable, str(scanner), "--level", str(level), "--root", str(project_root)],
-            capture_output=True,
-            text=True,
-            check=False,
-            encoding="utf-8",
-        )
-        if result.returncode != 0:
-            errors.append(f"ASVS L{level} scan reported findings:\n{result.stdout}\n{result.stderr}")
-    except Exception as exc:  # pragma: no cover
-        errors.append(f"Failed to run asvs_scanner.py: {exc}")
+    roots = [project_root / entry for entry in scan_roots] if scan_roots else [project_root]
+    for root in roots:
+        if not root.is_dir():
+            errors.append(f"ASVS scan root not found: {root} (scan_roots in sdlc-config.json).")
+            continue
+        print(f"ASVS L{level} scan root: {root}")
+        try:
+            result = subprocess.run(
+                [sys.executable, str(scanner), "--level", str(level), "--root", str(root)],
+                capture_output=True,
+                text=True,
+                check=False,
+                encoding="utf-8",
+            )
+            if result.returncode != 0:
+                errors.append(f"ASVS L{level} scan reported findings:\n{result.stdout}\n{result.stderr}")
+        except Exception as exc:  # pragma: no cover
+            errors.append(f"Failed to run asvs_scanner.py: {exc}")
 
 
-def select_version_dir(sdlc_dir: Path) -> Path | None:
-    """Return the highest vX.Y.Z folder (numeric order). Other names are ignored."""
+def select_version_dir(sdlc_dir: Path, wanted: str | None = None) -> Path | None:
+    """Return the highest vX.Y.Z folder (numeric order). Other names are ignored.
+
+    With `wanted` (e.g. "v1.1.0"), return exactly that folder, or None when it is malformed or does
+    not exist: the gate then validates the version under work instead of the highest one.
+    """
+    if wanted is not None:
+        chosen = sdlc_dir / wanted
+        return chosen if SEMVER_PATTERN.match(wanted) and chosen.is_dir() else None
     candidates: list[tuple[tuple[int, int, int], Path]] = []
     for d in sdlc_dir.iterdir():
         match = SEMVER_PATTERN.match(d.name) if d.is_dir() else None
@@ -397,9 +430,11 @@ def _digest(text: str) -> str:
 KNOWN_SHIPPED_SKELETONS: dict[str, set[str]] = {
     "2_architecture": {
         "cd778a69fec2ed93ceaaf0c3a0281e5112757ab1278689536728fb1c5faa9f28",  # release e28448a
+        "5e782cbc1972981731a5fa3383b610299f218b58aa4a21342e3989d91f7423ca",  # 63b5a4c (before BPSE)
     },
     "4_tests": {
         "070623a7351c4354357569b1155946af4faeac61c224ce13ecc27ded57b2cf11",  # release e28448a
+        "3c8742ce3b68bd6467b52f370926f1d074fe3b4a63a068545938d1433bbef661",  # 63b5a4c (before BPSE)
     },
 }
 
@@ -411,6 +446,193 @@ def _is_unauthored_skeleton(text: str, name: str) -> bool:
     if template.exists():
         known.add(_digest(template.read_text(encoding="utf-8")))
     return _digest(text) in known
+
+
+# Status value written by the architect under --auto-approve; only the user sets Accepted (BPSE 2.5).
+AUTO_APPROVE_STATUS = re.compile(
+    r"^[ \t]*[-*][ \t]*\*\*Status\*\*[ \t]*:[ \t]*(?:⬜[ \t]*)?Proposed — auto-approve[ \t]*$",
+    re.MULTILINE,
+)
+
+
+def _decodes(path: Path) -> bool:
+    """True when the file is absent or valid UTF-8."""
+    try:
+        if path.exists():
+            path.read_text(encoding="utf-8")
+        return True
+    except UnicodeDecodeError:
+        return False
+
+
+def check_decision_statuses(current_v: Path, warnings: list[str]) -> None:
+    """Warn (never block) about A### still waiting for the user: status `Proposed — auto-approve`.
+
+    The status exists only in the template version that introduced it, so older A### never raise
+    it. Code blocks are examples and are ignored.
+    """
+    text = strip_fences(read_text(current_v / CHAIN_FILES["A"]))
+    sections = re.split(r"^###[ \t]+(A\d{3})", text, flags=re.MULTILINE)
+    pending = [
+        sections[i]
+        for i in range(1, len(sections), 2)
+        if AUTO_APPROVE_STATUS.search(sections[i + 1] if i + 1 < len(sections) else "")
+    ]
+    if pending:
+        warnings.append(
+            f"Decisions written under --auto-approve, not yet accepted by the user: {pending} "
+            "(see HANDOFF.md)."
+        )
+
+
+# An A### the user has not accepted yet, with or without auto-approve. The option list of the
+# template is not a status: the pattern needs the line to end after the single value.
+UNACCEPTED_STATUS = re.compile(
+    r"^[ \t]*[-*][ \t]*\*\*Status\*\*[ \t]*:[ \t]*(?:⬜[ \t]*)?Proposed(?: — auto-approve)?[ \t]*$",
+    re.MULTILINE,
+)
+PLAIN_PROPOSED_STATUS = re.compile(
+    r"^[ \t]*[-*][ \t]*\*\*Status\*\*[ \t]*:[ \t]*(?:⬜[ \t]*)?Proposed[ \t]*$", re.MULTILINE
+)
+
+
+def check_tasks_under_pending_replacement(current_v: Path, errors: list[str]) -> None:
+    """Error: a P### hangs from a replacing A### (`Supersedes`) still plainly `Proposed`.
+
+    REV-002, scope set by the user after inspection BPSE 4: until the user accepts a replacement,
+    the decision it names stays in force, so no task may be built on the replacement. Out of scope
+    on purpose: `Proposed — auto-approve` (a non-blocking warning, plan 2.5) and a `Proposed` A###
+    without `Supersedes` (the status existed before this rule; older projects keep passing).
+    """
+    arch = strip_fences(read_text(current_v / CHAIN_FILES["A"]))
+    parts = re.split(r"^###[ \t]+(A\d{3})", arch, flags=re.MULTILINE)
+    pending = set()
+    for i in range(1, len(parts), 2):
+        body = parts[i + 1] if i + 1 < len(parts) else ""
+        if PLAIN_PROPOSED_STATUS.search(body) and SUPERSEDES_FIELD.search(body):
+            pending.add(parts[i])
+    if not pending:
+        return
+    tasks = strip_fences(read_text(current_v / CHAIN_FILES["P"]))
+    parts = re.split(r"^####[ \t]+(P\d{3}):(A\d{3})", tasks, flags=re.MULTILINE)
+    for i in range(1, len(parts), 3):
+        pid, parent = parts[i], parts[i + 1]
+        if parent in pending:
+            errors.append(
+                f"{pid} hangs from {parent}, a replacement not accepted yet: the decision it replaces "
+                "stays in force until the user accepts it (see HANDOFF.md)."
+            )
+
+
+SUPERSEDED_STATUS = re.compile(
+    r"^[ \t]*[-*][ \t]*\*\*Status\*\*[ \t]*:[ \t]*(?:↪[ \t]*)?Superseded by A\d{3}", re.MULTILINE
+)
+# Done = ✅, or the short code [D] that workflow-states.md allows where emoji are not rendered (R04).
+DONE_STATUS = re.compile(r"^[ \t]*[-*][ \t]*\*\*(?:Status|Statut)\*\*[ \t]*:[ \t]*(?:✅|\[D\])", re.MULTILINE)
+
+
+def check_superseded_tasks(current_v: Path, errors: list[str]) -> None:
+    """A superseded or rejected A### keeps its finished P### as history; an unfinished one must not run.
+
+    Every P### that hangs from a superseded or rejected A### and is not ✅ is an error: retire it
+    from 3_conception.md or re-parent it (BPSE 4.3, inspections SDLC-REV-001 and SDLC-BPSE-005).
+    """
+    arch = strip_fences(read_text(current_v / CHAIN_FILES["A"]))
+    parts = re.split(r"^###[ \t]+(A\d{3})", arch, flags=re.MULTILINE)
+    retired: dict[str, str] = {}
+    for i in range(1, len(parts), 2):
+        body = parts[i + 1] if i + 1 < len(parts) else ""
+        if SUPERSEDED_STATUS.search(body):
+            retired[parts[i]] = "superseded"
+        elif REJECTED_STATUS.search(body):
+            retired[parts[i]] = "rejected"
+    if not retired:
+        return
+    tasks = strip_fences(read_text(current_v / CHAIN_FILES["P"]))
+    parts = re.split(r"^####[ \t]+(P\d{3}):(A\d{3})", tasks, flags=re.MULTILINE)
+    for i in range(1, len(parts), 3):
+        pid, parent = parts[i], parts[i + 1]
+        body = parts[i + 2] if i + 2 < len(parts) else ""
+        if parent in retired and not DONE_STATUS.search(body):
+            target = "the replacing A###" if retired[parent] == "superseded" else "a decision in force"
+            errors.append(
+                f"{pid} is not done and hangs from {retired[parent]} {parent}: retire it or "
+                f"re-parent it to {target}."
+            )
+
+
+REJECTED_STATUS = re.compile(r"^[ \t]*[-*][ \t]*\*\*Status\*\*[ \t]*:[ \t]*(?:❌[ \t]*)?Rejected", re.MULTILINE)
+SUPERSEDES_FIELD = re.compile(r"^[ \t]*[-*][ \t]*\*\*Supersedes\*\*[ \t]*:[ \t]*A\d{3}", re.MULTILINE)
+
+
+def check_decisions_in_force(current_v: Path, errors: list[str], warnings: list[str]) -> None:
+    """Every A### in force needs at least one P### (inspection SDLC-R02).
+
+    A replacing decision (`Supersedes: A###`) without a task is an error: the replacement would never
+    be built. A replacement the user has not accepted yet is a warning only: the decision it names
+    stays in force meanwhile (SDLC-BPSE-004). Any other decision in force without a task is a
+    warning, as documented in traceability.md. Superseded and rejected decisions need no new task.
+    """
+    arch = strip_fences(read_text(current_v / CHAIN_FILES["A"]))
+    parts = re.split(r"^###[ \t]+(A\d{3})", arch, flags=re.MULTILINE)
+    tasks = strip_fences(read_text(current_v / CHAIN_FILES["P"]))
+    parents = set(re.findall(r"^####[ \t]+P\d{3}:(A\d{3})", tasks, flags=re.MULTILINE))
+    for i in range(1, len(parts), 2):
+        aid, body = parts[i], parts[i + 1] if i + 1 < len(parts) else ""
+        if SUPERSEDED_STATUS.search(body) or REJECTED_STATUS.search(body) or aid in parents:
+            continue
+        if SUPERSEDES_FIELD.search(body) and UNACCEPTED_STATUS.search(body):
+            warnings.append(f"{aid} is a replacement waiting for the user's acceptance; no P### yet.")
+        elif SUPERSEDES_FIELD.search(body):
+            errors.append(f"{aid} replaces an earlier decision but no P### implements it.")
+        else:
+            warnings.append(f"{aid} is in force but no P### implements it yet.")
+
+
+def _done_table_rows(text: str, prefix: str) -> dict[str, list[str]]:
+    """Summary-table rows whose ID column (first cell) is a `prefix###` and whose last cell is done.
+
+    The row is found by its own ID column, never by an ID quoted in another cell such as
+    Depends on (observation 0003). Returns {id: cells}.
+    """
+    rows: dict[str, list[str]] = {}
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("|"):
+            continue
+        cells = [cell.strip() for cell in stripped.strip("|").split("|")]
+        if len(cells) >= 2 and re.fullmatch(rf"{prefix}\d{{3}}", cells[0]) and (
+            cells[-1].startswith("✅") or cells[-1].startswith("[D]")
+        ):
+            rows[cells[0]] = cells
+    return rows
+
+
+def check_done_tasks_have_passed_tests(current_v: Path, findings: list[str]) -> None:
+    """A P### marked done needs at least one T### marked passed that points to it (observation 0003).
+
+    Done = ✅ or [D] in the P### `**Status**` field or in the last cell of its summary-table row.
+    Passed = the same marks on a `T###:P###` section or on a T### table row that names the P###.
+    """
+    tasks = strip_fences(read_text(current_v / CHAIN_FILES["P"]))
+    tests = strip_fences(read_text(current_v / CHAIN_FILES["T"]))
+    done = set(_done_table_rows(tasks, "P"))
+    parts = re.split(r"^####[ \t]+(P\d{3})", tasks, flags=re.MULTILINE)
+    for i in range(1, len(parts), 2):
+        if DONE_STATUS.search(parts[i + 1] if i + 1 < len(parts) else ""):
+            done.add(parts[i])
+    passed: set[str] = set()
+    parts = re.split(r"^#{3,4}[ \t]+(T\d{3}):(P\d{3})", tests, flags=re.MULTILINE)
+    for i in range(1, len(parts), 3):
+        if DONE_STATUS.search(parts[i + 2] if i + 2 < len(parts) else ""):
+            passed.add(parts[i + 1])
+    for cells in _done_table_rows(tests, "T").values():
+        passed.update(cell for cell in cells[1:-1] if re.fullmatch(r"P\d{3}", cell))
+    for pid in sorted(done - passed):
+        findings.append(
+            f"{pid} is marked done (✅) but no T### pointing to it is marked passed in 4_tests.md: "
+            "set it back to 🔄 or record the passing test."
+        )
 
 
 def check_chain(current_v: Path, tier: str | None, errors: list[str], phase: str = "release") -> None:
@@ -502,23 +724,46 @@ def check_chain(current_v: Path, tier: str | None, errors: list[str], phase: str
                 errors.append(f"Unfilled template placeholder in {fname}: {hit}")
 
 
+def check_glossary(sdlc_dir: Path, tier: str | None, errors: list[str], warnings: list[str]) -> None:
+    """glossary.md (SDLC_PM root). Missing: a warning at tiers full and exhaustive. Present with
+    unfilled template lines: an error at every active tier."""
+    path = sdlc_dir / "glossary.md"
+    if not path.exists():
+        if tier in ("full", "exhaustive"):
+            warnings.append(
+                f"glossary.md missing in SDLC_PM (tier {tier}): copy assets/glossary.template.md and list the project terms."
+            )
+        return
+    for hit in unfilled_placeholders(read_text(path)):
+        errors.append(f"Unfilled template placeholder in glossary.md: {hit}")
+
+
 def check_traceability(
-    project_root: Path | None = None, today: date | None = None, phase: str = "release"
+    project_root: Path | None = None,
+    today: date | None = None,
+    phase: str = "release",
+    sdlc_dir: Path | None = None,
+    version: str | None = None,
 ) -> int:
+    """Run the gate. sdlc_dir defaults to <project_root>/SDLC_PM; version defaults to the newest
+    vX.Y.Z folder (observation 0002: both can be named explicitly)."""
     project_root = project_root or Path.cwd()
     today = today or date.today()
     if phase not in PHASES:
         raise ValueError(f"unknown phase {phase!r}, expected one of {PHASES}")
-    sdlc_dir = project_root / "SDLC_PM"
+    sdlc_dir = sdlc_dir or project_root / "SDLC_PM"
     if not sdlc_dir.exists():
         print(f"❌ Error: folder {sdlc_dir} not found.")
+        return 1
+    if version is not None and select_version_dir(sdlc_dir, version) is None:
+        print(f"❌ Error: version folder {version!r} (vX.Y.Z) not found in {sdlc_dir}.")
         return 1
 
     errors: list[str] = []
     warnings: list[str] = []
 
     try:
-        config = load_config(project_root)
+        config = load_config(project_root, sdlc_dir)
     except SystemExit as exc:
         print(exc.code)
         return 2
@@ -531,7 +776,7 @@ def check_traceability(
         return 0
 
     legacy = tier not in SUPPORTED_DOCUMENTATION_TIERS_SET
-    current_v = select_version_dir(sdlc_dir)
+    current_v = select_version_dir(sdlc_dir, version)
     needs_version = legacy or tier in TIERS_WITH_CHAIN
     if needs_version and current_v is None:
         print(f"❌ Error: no version folder (vX.X.X) found in {sdlc_dir}.")
@@ -544,13 +789,36 @@ def check_traceability(
         check_handoff(sdlc_dir, today, errors, warnings)
     if needs_version and current_v is not None:
         check_chain(current_v, tier, errors, phase=phase)
+        # The decision checks reread A and P. An undecodable file already has its ❌ line from
+        # check_chain, so they are skipped instead of raising a traceback (SDLC-BPSE-003).
+        # At standard, an untouched architecture skeleton was never authored: its example A### are not
+        # decisions in force (SDLC-BPSE-RV-04, same exclusion as check_chain).
+        arch_path = current_v / CHAIN_FILES["A"]
+        arch_unauthored = (
+            tier == "standard" and arch_path.exists()
+            and _is_unauthored_skeleton(read_text(arch_path), "2_architecture")
+        )
+        if all(_decodes(current_v / CHAIN_FILES[k]) for k in ("A", "P")) and not arch_unauthored:
+            check_decision_statuses(current_v, warnings)
+            check_superseded_tasks(current_v, errors)
+            check_tasks_under_pending_replacement(current_v, errors)
+            check_decisions_in_force(current_v, errors, warnings)
+        # A ✅ P### needs a passed T### at release. Strict tiers block; legacy projects keep their
+        # verdict and get a warning; at standard T### are optional (observation 0003).
+        if (
+            phase == "release" and (legacy or tier in TIERS_STRICT)
+            and all(_decodes(current_v / CHAIN_FILES[k]) for k in ("P", "T"))
+        ):
+            check_done_tasks_have_passed_tests(current_v, warnings if legacy else errors)
 
     asvs_level = int(config.get("asvs_level", 1)) if config else 0
     if tier == "full" and asvs_level < 1:
         errors.append(f"documentation_tier full requires asvs_level >= 1 (found {asvs_level}).")
     if tier == "exhaustive" and asvs_level < 2:
         errors.append(f"documentation_tier exhaustive requires asvs_level >= 2 (found {asvs_level}).")
-    run_asvs_scan(project_root, asvs_level, errors)
+    check_glossary(sdlc_dir, tier, errors, warnings)
+    scan_roots = config.get("scan_roots") if config else None
+    run_asvs_scan(project_root, asvs_level, errors, scan_roots if valid_scan_roots(scan_roots) else None)
 
     print()
     for warning in warnings:
@@ -589,9 +857,24 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default="release",
         help="plan: precondition of /sdlc:dev (4_tests.md not required yet). release: full check (default).",
     )
+    parser.add_argument(
+        "--sdlc-dir",
+        type=Path,
+        default=None,
+        help="SDLC folder holding sdlc-config.json and the version folders. Default: <project-root>/SDLC_PM.",
+    )
+    parser.add_argument(
+        "--version",
+        default=None,
+        metavar="vX.Y.Z",
+        help="Version folder to check (vX.Y.Z). Default: the newest vX.Y.Z folder, compared by number.",
+    )
     return parser.parse_args(argv)
 
 
 if __name__ == "__main__":
     args = _parse_args()
-    sys.exit(check_traceability(project_root=args.project_root, today=args.today, phase=args.phase))
+    sys.exit(check_traceability(
+        project_root=args.project_root, today=args.today, phase=args.phase,
+        sdlc_dir=args.sdlc_dir, version=args.version,
+    ))

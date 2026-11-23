@@ -58,7 +58,7 @@ Firm rules:
 
 - **Framework**: `vitest` (fast, ESM, jest-compatible when needed)
 - **Naming**: `<module>.test.ts` next to the source or in `tests/`
-- **Coverage target**: 70% minimum
+- **Coverage target**: the project's `test_coverage_min` (default 70%), an indicator rather than a universal quota; never invent a threshold the project did not set
 - **Mocks**: `vi.fn()`, `vi.mock()`. Prefer real dependencies when they are cheap.
 
 ## Recommended project layout

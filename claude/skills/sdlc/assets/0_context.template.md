@@ -70,14 +70,7 @@ Systems, APIs, files, accounts and secrets the project needs to run but does
 
 ## Glossary
 
-Business and project terms with a single agreed meaning. One line per term;
-add a term the first time two people (or an agent) could read it differently.
-Keep technical identifiers out of here (they live in the code and the A###).
-
-| Term | Definition | Also called / not to be confused with |
-|---|---|---|
-| `<e.g. Invoice>` | `<a document issued to a customer after delivery, with a due date>` | `<"bill" in support tickets; not a quote>` |
-| `<e.g. Wave>` | `<a set of P### with no dependency between them, run in parallel>` | `<not a sprint>` |
+Project terms and their agreed meanings live in [glossary.md](glossary.md) (copied from `assets/glossary.template.md`). Keep it current.
 
 ---
 

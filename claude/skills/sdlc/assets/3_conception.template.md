@@ -44,6 +44,7 @@
 - **Size** : `<S/M/L>` (S < 30 min, M < 2h, L < 1 day)
 - **Language** : `<python\|javascript\|typescript\|go\|rust>` (if multi-stack)
 - **Target files** : `<relative paths>` (declared write-set, comma-separated relative paths; feeds the intra-wave write-conflict linter in `wave_planner.py`)
+- **Fixes contract** : `<none, or the API/event/interface this P### defines; its consumers list this P### in Depends on>`
 - **Code Lock criteria** :
   - No change allowed until this P### is planned and its `--phase plan` gate passes (✅ is set after verification)
   - The associated T### must pass

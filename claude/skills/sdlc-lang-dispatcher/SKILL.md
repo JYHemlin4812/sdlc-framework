@@ -74,8 +74,11 @@ Whatever the language, every subagent invoked for a P###:
 5. **Applies TDD by task type (doctrine owned by `sdlc-evolve`)**: required — failing test
    first — for any P### touching **production code** (feature, bugfix, refactor);
    recommended/optional for **mechanical** P### (config, scaffolding, generated code,
-   throwaway prototype). For production code, see the test fail before writing the code,
-   not alongside it.
+   throwaway prototype). For new behavior in production code, see the test fail before
+   writing the code, not alongside it. Exception: a **refactor of existing behavior** starts
+   with a characterization test, which passes on its first run; a test **written after** the
+   code is declared as such. Both record their RED status (`observed` / `characterization` /
+   `written-after`) in `4_tests.md` — see `sdlc-evolve`, "When RED cannot be observed".
 6. **Documents minimally**: docstrings on public functions; no comments that restate what
    the code does (the name is enough).
 7. **Handles errors explicitly**: no bare `except:` (Python), no untyped `catch` (TS), etc.

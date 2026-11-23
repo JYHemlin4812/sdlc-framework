@@ -76,7 +76,7 @@ Firm rules:
 - **Table-driven tests** preferred for multiple cases
 - **Subtests**: `t.Run("name", func(t *testing.T) { ... })`
 - **Race detector** required in CI: `go test -race`
-- **Coverage target**: 70% minimum
+- **Coverage target**: the project's `test_coverage_min` (default 70%), an indicator rather than a universal quota; never invent a threshold the project did not set
 
 ```go
 func TestParseCSV(t *testing.T) {

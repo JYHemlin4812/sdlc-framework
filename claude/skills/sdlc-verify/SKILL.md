@@ -65,6 +65,12 @@ One run of the right command is enough. Run it again only after changing code.
 | "No regression" | "I only touched one file" | Full suite run |
 | "The agent delivered" | The agent's report says so | `git status`/diff and tests you ran yourself |
 | "Requirement met" | "Looks right" | BDD acceptance criterion executed |
+| "Checked, nothing failed" | The tool is missing or a dependency is unavailable, so nothing ran | The check actually ran; otherwise report it as **not run**, with the reason. A missing tool is never a success |
+| "CI is green" | The suite passes locally | The remote CI run observed (link or status). A local result does not prove remote CI |
+| "Approved" / "reviewed" | Nobody was asked, or the approval is assumed | The approver's actual answer, quoted. Never invent an approval, a reviewer or a benchmark |
+
+Report the exact commands, their scope, their results, and every check **not run** with its
+reason (adapted from the BPSE `se-tdd` and `se-review` conclusions; see `sdlc/SOURCES.md`).
 
 ## Signs you are about to skip it
 

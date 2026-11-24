@@ -27,7 +27,6 @@
 #   ./install.sh --dry-run                         # simulation (0 writes)
 #   ./install.sh --force --no-backup               # reinstall without backup
 #   ./install.sh --source-root DIR --claude-root DIR
-#   ./install.sh --remove-import                   # only remove '@NESTOR.md' from CLAUDE.md
 
 # ponytail: `set -uo pipefail` WITHOUT -e — many commands legitimately exit
 # != 0 (verify, grep -c, git status outside a repo, acquire_sync_lock);
@@ -126,26 +125,10 @@ _install_cleanup() {
 }
 
 # ===========================================================================
-# Core: invoke_install <source_root> <claude_root> <force> <dry_run> <no_backup> <remove_import>
+# Core: invoke_install <source_root> <claude_root> <force> <dry_run> <no_backup>
 # ===========================================================================
 invoke_install() {
-    local SourceRoot="$1" ClaudeRoot="$2" Force="$3" DryRun="$4" NoBackup="$5" RemoveImport="${6:-0}"
-
-    # --- P022:A019: --remove-import is a flag SEPARATE from the normal run —
-    #     it only removes the '@NESTOR.md' import from ClaudeRoot/CLAUDE.md and does
-    #     NOT run the rest of the installation (no SourceRoot/greenlist needed here).
-    if [[ "$RemoveImport" == "1" ]]; then
-        local rmCanon
-        rmCanon=$(realpath -m "$ClaudeRoot" 2>/dev/null) || rmCanon="$ClaudeRoot"
-        local rmClaudeMd="$rmCanon/CLAUDE.md"
-        if [[ "$DryRun" == "1" ]]; then
-            remove_nestor_import --dry-run "$rmClaudeMd"
-        else
-            remove_nestor_import "$rmClaudeMd"
-        fi
-        write_ok "Import '@NESTOR.md' removed (if present): $rmClaudeMd"
-        return 0
-    fi
+    local SourceRoot="$1" ClaudeRoot="$2" Force="$3" DryRun="$4" NoBackup="$5"
 
     write_header "SDLC v$VERSION — System installer (disaster-recovery bootstrap)"
 
@@ -381,6 +364,12 @@ invoke_install() {
     installedAt=$(date -u +%Y-%m-%dT%H:%M:%SZ)
     sourceNorm="${SourceRoot//\\//}"
     skillsJson=$(printf '"%s",' "${SKILLS[@]}"); skillsJson="[${skillsJson%,}]"
+    # Per-file ownership (T6): byte-exact hash of every file deployed, read back from the live tree.
+    local hashesJson="" hsep="" hrel
+    for hrel in "${deployed[@]}"; do
+        hashesJson+="${hsep}    \"${hrel}\": \"$(get_file_hash_byteexact "$ClaudeRoot/$hrel")\""
+        hsep=$',\n'
+    done
     write_file_atomic "$manifestPath" >/dev/null <<EOF
 {
   "version": "$VERSION",
@@ -392,6 +381,9 @@ invoke_install() {
   "agents_count": $agentCount,
   "files_count": ${#deployed[@]},
   "checksum_sha256": "$globalChecksum",
+  "file_hashes": {
+$hashesJson
+  },
   "installer": "install.sh",
   "bash_version": "${BASH_VERSION:-unknown}"
 }
@@ -421,12 +413,11 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
     CLAUDE_ROOT="${HOME}/.claude"
     # Canonical REF = ../../claude (bundle/scripts -> sdlc-framework/claude), NOT bundle/.
     SOURCE_ROOT="$SCRIPT_DIR/../../claude"
-    FORCE=0; DRY_RUN=0; NO_BACKUP=0; REMOVE_IMPORT=0
+    FORCE=0; DRY_RUN=0; NO_BACKUP=0
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --claude-root)   CLAUDE_ROOT="$2"; shift 2 ;;
             --source-root)   SOURCE_ROOT="$2"; shift 2 ;;
-            --remove-import) REMOVE_IMPORT=1; shift ;;
             --force)       FORCE=1; shift ;;
             --dry-run)     DRY_RUN=1; shift ;;
             --no-backup)   NO_BACKUP=1; shift ;;
@@ -434,6 +425,6 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
             *)             write_err "Unknown option: $1"; exit 2 ;;
         esac
     done
-    invoke_install "$SOURCE_ROOT" "$CLAUDE_ROOT" "$FORCE" "$DRY_RUN" "$NO_BACKUP" "$REMOVE_IMPORT"
+    invoke_install "$SOURCE_ROOT" "$CLAUDE_ROOT" "$FORCE" "$DRY_RUN" "$NO_BACKUP"
     exit $?
 fi

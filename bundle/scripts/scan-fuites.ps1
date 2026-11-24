@@ -32,7 +32,7 @@
         .github/, root files, AND any unlisted folder (anything not recognized
         as internal is treated as public).
       - Internal zone (informational counts ONLY, no zero tolerance):
-        SDLC_PM/, nestor/.
+        SDLC_PM/.
 
     History probe (3 revisions, same patterns, no checkout - git grep on a
     tree-ish):
@@ -144,11 +144,11 @@ function Get-FuitesLevel2Patterns {
     return $out.ToArray()
 }
 
-# --- Fail-safe zoning (A044): internal = SDLC_PM/ or nestor/, otherwise public ---
+# --- Fail-safe zoning (A044): internal = SDLC_PM/, otherwise public ---
 function Get-FuitesZone {
     param([Parameter(Mandatory)][AllowEmptyString()][string]$RelPath)
     Set-StrictMode -Version Latest
-    if ($RelPath -like 'SDLC_PM/*' -or $RelPath -like 'nestor/*') { return 'internal' }
+    if ($RelPath -like 'SDLC_PM/*') { return 'internal' }
     return 'public'
 }
 

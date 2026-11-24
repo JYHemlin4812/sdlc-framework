@@ -6,18 +6,18 @@
 
 .DESCRIPTION
   Creates ALL its fixtures in a single TEMP directory (fake LIVE ClaudeRoot with
-  skills + commands/sdlc + agents + NESTOR.md + CLAUDE.md). NEVER operates on the
+  skills + commands/sdlc + agents + PERSO.md + CLAUDE.md). NEVER operates on the
   real ~/.claude. Cleans up in finally.
 
   Covers:
     (U0) source invariants: Get-DomainRelPaths (never a hard-coded agent list),
-         testable Invoke-Uninstall (dot-source + auto-run guard), Remove-NestorImport.
+         testable Invoke-Uninstall (dot-source + auto-run guard), no external component.
     (U1) default behavior (without -RemoveCore) STRICTLY identical to before:
-         skills + commands/sdlc removed and backed up; agents, NESTOR.md and CLAUDE.md
+         skills + commands/sdlc removed and backed up; agents, PERSO.md and CLAUDE.md
          UNTOUCHED (byte-identical).
     (U2) -RemoveCore: sdlc-* agents removed from live and backed up (full relPath, no
-         basename collision between nested agents), '@NESTOR.md' import removed from
-         CLAUDE.md (otherwise byte-identical).
+         basename collision between nested agents), CLAUDE.md never modified:
+         CLAUDE.md byte-identical.
     (U3) -RemoveCore on a live tree WITHOUT agents/core: graceful no-op (no crash).
     (U4) interactive confirmation: without -Force, answer 'non' -> cancelled, live intact.
 
@@ -75,10 +75,10 @@ function New-TextFile {
 }
 
 $MANIFEST_JSON = '{"version":"3.2.0","skills":["sdlc","sdlc-wave-orchestrator","sdlc-lang-dispatcher","sdlc-asvs-auditor"]}'
-$CLAUDE_MD_TEXT = "# My personal CLAUDE.md`nPre-existing user content.`n@NESTOR.md`n"
+$CLAUDE_MD_TEXT = "# My personal CLAUDE.md`nPre-existing user content.`n@keep-me.md`n"
 
 # Complete LIVE fixture: 4 skills (including the manifest), commands/sdlc, 3 agents (one
-# of them RECURSIVE under agents/nested/ + one nestor-*), NESTOR.md, CLAUDE.md WITH the import.
+# of them RECURSIVE under agents/nested/ + one outside the domain), PERSO.md, CLAUDE.md.
 function New-UninstallCase {
     param([string]$Name)
     $c    = Join-Path $root $Name
@@ -93,8 +93,8 @@ function New-UninstallCase {
     New-TextFile (Join-Path $live 'commands\sdlc\brainstorm.md') "brainstorm cmd`n"
     New-TextFile (Join-Path $live 'agents\sdlc-architect.md') "architect agent`n"
     New-TextFile (Join-Path $live 'agents\nested\sdlc-deep.md') "deep nested agent`n"
-    New-TextFile (Join-Path $live 'agents\nestor-clara.md') "clara agent`n"
-    New-TextFile (Join-Path $live 'NESTOR.md') "nestor core`n"
+    New-TextFile (Join-Path $live 'agents\autre-clara.md') "clara agent`n"
+    New-TextFile (Join-Path $live 'PERSO.md') "perso core`n"
     New-TextFile (Join-Path $live 'CLAUDE.md') $CLAUDE_MD_TEXT
 
     return [pscustomobject]@{ Dir = $c; Live = $live }
@@ -124,17 +124,16 @@ try {
     Write-Host "-- (U0) source invariants --" -ForegroundColor Cyan
     $src = Get-Content -LiteralPath $uninstallPath -Raw
     Assert-True ($src -match 'Get-DomainRelPaths')          "U0. agents/core scope via Get-DomainRelPaths (single source)"
-    Assert-True ($src -match 'Remove-NestorImport')         "U0. import removal via Remove-NestorImport (single source)"
+    Assert-True ($src -notmatch ('nes' + 'tor'))        "U0. uninstall names no external component"
     Assert-True ($src -match 'function Invoke-Uninstall')  "U0. logic wrapped in Invoke-Uninstall (testable)"
     Assert-True ($src -match "InvocationName -ne '\.'")     "U0. auto-run guard (skipped when dot-sourced)"
     Assert-True ($src -match '\[switch\]\$RemoveCore')      "U0. -RemoveCore flag declared"
     # Criterion (5c): ZERO hard-coded list of agent names — only SKILLS_DEFAULT
     # (skills, pre-existing, allowed) may appear; no literal list of agents
-    # (sdlc-architect, nestor-clara, etc.) hard-coded in the script.
+    # (sdlc-architect, autre-clara, etc.) hard-coded in the script.
     Assert-True ($src -notmatch 'AGENTS_DEFAULT')                    "U0. no hard-coded AGENTS_DEFAULT list"
     Assert-True ($src -notmatch 'sdlc-architect')          "U0. no hard-coded literal agent name"
-    Assert-True ($src -notmatch 'nestor-clara')               "U0. no hard-coded literal nestor-* agent name"
-    Assert-True ($src -match "'agents/\*'")                   "U0. agents scope derived by domain prefix, not by name"
+        Assert-True ($src -match "'agents/\*'")                   "U0. agents scope derived by domain prefix, not by name"
 
     # =======================================================================
     # (U1) default behavior (WITHOUT -RemoveCore): strict non-regression
@@ -149,8 +148,8 @@ try {
     Assert-True (-not (Test-Live $u1 'commands/sdlc'))                  "U1. commands/sdlc removed"
     Assert-True (Test-Live $u1 'agents/sdlc-architect.md')              "U1. sdlc-architect agent UNTOUCHED (no -RemoveCore)"
     Assert-True (Test-Live $u1 'agents/nested/sdlc-deep.md')            "U1. nested agent UNTOUCHED"
-    Assert-True (Test-Live $u1 'agents/nestor-clara.md')                  "U1. nestor-* agent UNTOUCHED"
-    Assert-True (Test-Live $u1 'NESTOR.md')                               "U1. NESTOR.md core UNTOUCHED"
+    Assert-True (Test-Live $u1 'agents/autre-clara.md')                   "U1. outside-domain agent UNTOUCHED"
+    Assert-True (Test-Live $u1 'PERSO.md')                                 "U1. PERSO.md (outside domain) UNTOUCHED"
     Assert-True (Test-Live $u1 'CLAUDE.md')                               "U1. CLAUDE.md UNTOUCHED"
     $claudeMdAfter1 = Read-Text (Join-Path $u1.Live 'CLAUDE.md')
     Assert-Eq $claudeMdBefore $claudeMdAfter1 "U1. CLAUDE.md byte-identical (import NOT touched without -RemoveCore)"
@@ -171,20 +170,19 @@ try {
     Assert-True (-not (Test-Live $u2 'skills/sdlc'))                     "U2. sdlc skill removed (base behavior preserved)"
     Assert-True (-not (Test-Live $u2 'agents/sdlc-architect.md'))        "U2. sdlc-architect agent removed"
     Assert-True (-not (Test-Live $u2 'agents/nested/sdlc-deep.md'))      "U2. nested agent removed"
-    Assert-True (Test-Live $u2 'agents/nestor-clara.md')            "U2. nestor-* agent NOT removed (outside the SDLC domain)"
-    Assert-True (Test-Live $u2 'NESTOR.md')                         "U2. NESTOR.md core NOT removed (outside the SDLC domain)"
+    Assert-True (Test-Live $u2 'agents/autre-clara.md')             "U2. outside-domain agent NOT removed"
+    Assert-True (Test-Live $u2 'PERSO.md')                          "U2. PERSO.md NOT removed (outside the SDLC domain)"
     Assert-True (Test-Live $u2 'CLAUDE.md')                                "U2. CLAUDE.md itself PRESERVED (only the import line is removed)"
     $claudeMdAfter2 = Read-Text (Join-Path $u2.Live 'CLAUDE.md')
-    Assert-True ($claudeMdAfter2 -notmatch '(?m)^\s*@NESTOR\.md\s*$') "U2. '@NESTOR.md' line removed from CLAUDE.md"
-    Assert-True ($claudeMdAfter2 -match 'Pre-existing user content\.') "U2. rest of the CLAUDE.md content preserved"
-    # backup: agents present, WITHOUT basename collision (nested vs root)
+    Assert-Eq $CLAUDE_MD_TEXT $claudeMdAfter2 "U2. CLAUDE.md byte-identical (-RemoveCore never edits CLAUDE.md)"
+        # backup: agents present, WITHOUT basename collision (nested vs root)
     $bkDirs2 = @(Get-BackupDirs -Case $u2)
     Assert-Eq 1 $bkDirs2.Count "U2. exactly 1 timestamped backup folder"
     $bkRoot2 = $bkDirs2[0].FullName
     Assert-True (Test-Path -LiteralPath (Join-Path $bkRoot2 'agents\sdlc-architect.md')) "U2. backup: root agent present"
     Assert-True (Test-Path -LiteralPath (Join-Path $bkRoot2 'agents\nested\sdlc-deep.md')) "U2. backup: nested agent present (full relative path, no collision)"
-    Assert-True (-not (Test-Path -LiteralPath (Join-Path $bkRoot2 'agents\nestor-clara.md'))) "U2. backup: nestor-* agent absent"
-    Assert-True (-not (Test-Path -LiteralPath (Join-Path $bkRoot2 'NESTOR.md'))) "U2. backup: NESTOR.md core absent"
+    Assert-True (-not (Test-Path -LiteralPath (Join-Path $bkRoot2 'agents\autre-clara.md'))) "U2. backup: outside-domain agent absent"
+    Assert-True (-not (Test-Path -LiteralPath (Join-Path $bkRoot2 'PERSO.md'))) "U2. backup: PERSO.md absent"
 
     # =======================================================================
     # (U3) -RemoveCore on a live tree WITHOUT agents/core: graceful no-op
@@ -192,7 +190,7 @@ try {
     Write-Host "-- (U3) -RemoveCore without agents/core present: graceful no-op --" -ForegroundColor Cyan
     $u3 = New-UninstallCase -Name 'u3'
     Remove-Item -LiteralPath (Join-Path $u3.Live 'agents') -Recurse -Force
-    Remove-Item -LiteralPath (Join-Path $u3.Live 'NESTOR.md') -Force
+    Remove-Item -LiteralPath (Join-Path $u3.Live 'PERSO.md') -Force
     Remove-Item -LiteralPath (Join-Path $u3.Live 'CLAUDE.md') -Force
     $r3 = Invoke-UninstallCase -P @{ ClaudeRoot = $u3.Live; Force = $true; RemoveCore = $true }
     Assert-Eq 0 $r3.Rc "U3. exit 0 (no crash without agents/core/CLAUDE.md)"

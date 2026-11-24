@@ -5,11 +5,9 @@
 # Usage: ./uninstall.sh [--claude-root DIR] [--force] [--discover] [--remove-core]
 #
 # P025:A023 — --remove-core (additive flag, OPT-IN): on top of the default behavior
-# (skills + commands/sdlc/), also removes the claude/agents/{sdlc-*,nestor-*}
-# agents and the NESTOR.md core PRESENT IN LIVE, in the SAME backup/removal pass,
-# then removes the '@NESTOR.md' import from the personal CLAUDE.md
-# (remove_nestor_import, single source sync-lib.sh). Without the flag: behavior
-# STRICTLY identical to before (agents and core untouched) — non-regression.
+# (skills + commands/sdlc/), also removes the claude/agents/sdlc-* agents PRESENT
+# IN LIVE, in the SAME backup/removal pass. CLAUDE.md is never modified. Without the
+# flag: behavior STRICTLY identical to before (agents untouched) — non-regression.
 #
 # The agents/core scope is DERIVED from get_domain_relpaths (sync-lib, single
 # source of the domain) — never a hard-coded list of agent names (M4).
@@ -17,7 +15,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# --- Shared foundation (single source A002/A004; get_domain_relpaths, remove_nestor_import) ---
+# --- Shared foundation (single source A002/A004; get_domain_relpaths) ---
 # shellcheck source=/dev/null
 . "$SCRIPT_DIR/sync-lib.sh"
 
@@ -42,6 +40,39 @@ write_warn()   { printf "  ${C_YELLOW}[WARN] %s${C_RESET}\n" "$1"; }
 write_err()    { printf "  ${C_RED}[ERR] %s${C_RESET}\n" "$1" >&2; }
 
 # ===========================================================================
+# remove_owned_tree <dir> <claude_root> — removes ONLY the files that belong to the
+# bundle (get_domain_relpaths, plus the install manifest). A personal file added in
+# the directory is kept and reported; the directory is removed only if it ends up empty.
+# (T6: no more `rm -rf` of a whole skill or commands folder.)
+# ===========================================================================
+is_owned_file() { # <file> <claude_root>: 0 = safe to remove (bundle file, unchanged)
+    local f="${1//\\//}" root="${2//\\//}" rel h
+    [[ "$HAS_FILE_HASHES" == "1" ]] || return 0   # legacy manifest: no per-file record
+    rel="${f#$root/}"
+    h=$(get_file_hash_byteexact "$f")
+    [[ -n "${EXPECTED_HASH[$rel]:-}" && "${EXPECTED_HASH[$rel]}" == "$h" ]]
+}
+
+remove_owned_tree() {
+    local dir="${1//\\//}" root="${2//\\//}" f rel
+    local -A owned=()
+    while IFS= read -r rel; do
+        [[ -n "$rel" ]] && owned["$root/$rel"]=1
+    done < <(get_domain_relpaths "$root")
+    while IFS= read -r f; do
+        if [[ "${f##*/}" == ".install-manifest.json" ]] || { [[ -n "${owned[$f]:-}" ]] && is_owned_file "$f" "$root"; }; then
+            write_step "rm -f $f"
+            rm -f -- "$f"
+        else
+            write_warn "kept (not from the bundle, or modified): $f"
+        fi
+    done < <(find "$dir" -type f)
+    find "$dir" -depth -type d -empty -exec rmdir -- {} + 2>/dev/null
+    [[ -d "$dir" ]] && write_warn "kept (not empty): $dir"
+    return 0
+}
+
+# ===========================================================================
 # Core: invoke_uninstall <claude_root> <force> <discover> <remove_core>
 # ===========================================================================
 invoke_uninstall() {
@@ -56,6 +87,18 @@ invoke_uninstall() {
     # --- Read the manifest ---
     local SKILLS=()
     local MANIFEST_VERSION="(unknown)"
+    # Per-file ownership (T6): path -> sha256 recorded by install.sh ("file_hashes").
+    declare -gA EXPECTED_HASH=()
+    HAS_FILE_HASHES=0
+    if [[ -f "$MANIFEST_PATH" ]] && grep -q '"file_hashes"' "$MANIFEST_PATH"; then
+        HAS_FILE_HASHES=1
+        local hline
+        while IFS= read -r hline; do
+            if [[ "$hline" =~ \"([^\"]+)\"[[:space:]]*:[[:space:]]*\"([a-f0-9]{64})\" ]]; then
+                EXPECTED_HASH["${BASH_REMATCH[1]}"]="${BASH_REMATCH[2]}"
+            fi
+        done < "$MANIFEST_PATH"
+    fi
 
     if [[ -f "$MANIFEST_PATH" ]]; then
         MANIFEST_VERSION=$(grep -oE '"version"[[:space:]]*:[[:space:]]*"[^"]+"' "$MANIFEST_PATH" | head -n1 | cut -d'"' -f4)
@@ -81,13 +124,13 @@ invoke_uninstall() {
     local skill p
     for skill in "${SKILLS[@]}"; do
         p="$TARGET_SKILLS_DIR/$skill"
-        if [[ -d "$p" ]]; then TO_REMOVE+=("$p"); TO_REMOVE_NAME+=("$skill"); fi
+        if [[ -d "$p" ]]; then TO_REMOVE+=("$p"); TO_REMOVE_NAME+=("skills/$skill"); fi
     done
     if [[ -d "$TARGET_COMMANDS_DIR" ]]; then
-        TO_REMOVE+=("$TARGET_COMMANDS_DIR"); TO_REMOVE_NAME+=("$(basename -- "$TARGET_COMMANDS_DIR")")
+        TO_REMOVE+=("$TARGET_COMMANDS_DIR"); TO_REMOVE_NAME+=("commands/$COMMANDS_NS")
     fi
 
-    # --- P025:A023: --remove-core — sdlc-*/nestor-* agents + NESTOR.md core IN LIVE.
+    # --- P025:A023: --remove-core — sdlc-* agents IN LIVE.
     #     Scope DERIVED from get_domain_relpaths (never a hard-coded list of names, M4).
     #     Backup name = full relPath (avoids any basename collision between agents
     #     in different subfolders, see the recursive get_domain_relpaths).
@@ -96,7 +139,12 @@ invoke_uninstall() {
         while IFS= read -r rel; do
             [[ -n "$rel" ]] || continue
             case "$rel" in
-                'NESTOR.md'|agents/*) ;;
+                agents/*) ;;
+                *) continue ;;
+            esac
+            # Filter on the file NAME (sdlc-*), at any depth under agents/ (R06).
+            case "${rel##*/}" in
+                sdlc-*) ;;
                 *) continue ;;
             esac
             full="$ClaudeRoot/$rel"
@@ -111,6 +159,10 @@ invoke_uninstall() {
     if [[ ${#TO_REMOVE[@]} -eq 0 ]]; then
         write_warn "No SDLC artifact found. Nothing to remove."
         return 0
+    fi
+
+    if [[ "$HAS_FILE_HASHES" != "1" ]]; then
+        write_warn "Legacy install (manifest has no file_hashes): every file in the SDLC folders will be removed, personal files included. A backup is made first."
     fi
 
     printf "\n  Will be removed:\n"
@@ -148,8 +200,14 @@ invoke_uninstall() {
     # --- Removal ---
     write_header "Removal"
     for p in "${TO_REMOVE[@]}"; do
-        write_step "rm -rf $p"
-        rm -rf "$p"
+        if [[ -d "$p" ]]; then
+            remove_owned_tree "$p" "$ClaudeRoot"
+        elif is_owned_file "$p" "$ClaudeRoot"; then
+            write_step "rm -f $p"
+            rm -f -- "$p"
+        else
+            write_warn "kept (modified or not from the bundle): $p"
+        fi
     done
 
     # Remove commands/ if empty
@@ -157,17 +215,6 @@ invoke_uninstall() {
     if [[ -d "$COMMANDS_PARENT" ]] && [[ -z "$(ls -A "$COMMANDS_PARENT")" ]]; then
         write_step "Removing empty commands/"
         rmdir "$COMMANDS_PARENT"
-    fi
-
-    # --- --remove-core: remove the '@NESTOR.md' import from the personal CLAUDE.md ---
-    #     Same EXACT resolution as install.sh --remove-import (realpath -m +
-    #     "$canon/CLAUDE.md") so the same file is targeted.
-    if [[ "$RemoveCore" == "1" ]]; then
-        local rmCanon rmClaudeMd
-        rmCanon=$(realpath -m "$ClaudeRoot" 2>/dev/null) || rmCanon="$ClaudeRoot"
-        rmClaudeMd="$rmCanon/CLAUDE.md"
-        remove_nestor_import "$rmClaudeMd"
-        write_ok "Import '@NESTOR.md' removed (if present): $rmClaudeMd"
     fi
 
     write_header "Uninstall complete"

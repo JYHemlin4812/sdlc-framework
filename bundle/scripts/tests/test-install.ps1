@@ -166,11 +166,9 @@ try {
         $realGreen  = @(Get-DomainRelPaths -Root $realRef)
         $realCmd    = @($realGreen | Where-Object { $_ -like 'commands/sdlc/*' }).Count
         $realAgents = @($realGreen | Where-Object { $_ -like 'agents/*' }).Count
-        $realCore   = @($realGreen | Where-Object { $_ -eq 'NESTOR.md' }).Count
         Assert-Eq 14 $realSkills.Count "C1. real ref: 14 sdlc* skills (derived)"
         Assert-Eq 19 $realCmd          "C1. real ref: 19 commands (derived)"
         Assert-Eq 12 $realAgents       "C1. real ref: 12 agents (sdlc-*, derived)"
-        Assert-Eq 0  $realCore         "C1. real ref: 0 NESTOR.md core (outside the SDLC domain)"
     } else {
         Write-Host "  (C1 skipped: real ref not found at $realRef)" -ForegroundColor DarkYellow
     }
@@ -374,48 +372,43 @@ try {
     Assert-Eq 0 $r13b.Rc "C13. -Force -NoBackup: exit 0"
     # -NoBackup ONLY governs the backup of DOMAIN files ('sdlc-' prefix, step 6-8 of
     # Invoke-Install) — separate from the independent Set-GenericImport backup
-    # ('nestor-import-' prefix, P022/A019, never gated by -NoBackup), which can legitimately
-    # appear here: r13a adds 2 markers (@NESTOR.md + @CLAUDE.local.md, P033:A029) to a freshly
-    # created CLAUDE.md, and the 2nd marker finds an "existing" file (created by the 1st call
-    # in the same run) -> backup outside the -NoBackup scope.
+    # ('import-' prefix, never gated by -NoBackup).
     $domainBackups13 = @(Get-ChildItem -LiteralPath (Join-Path $k13.Live '_backups') -Directory -Filter 'sdlc-*' -ErrorAction SilentlyContinue)
     Assert-Eq 0 $domainBackups13.Count "C13. F8: -NoBackup -> no DOMAIN backup folder (sdlc-*) created"
     Assert-True (Test-Live $k13 'skills/sdlc/SKILL.md') "C13. F8: deployment done despite -NoBackup"
 
     # =======================================================================
-    # (C14) P022:A019 — no '@NESTOR.md' import in ClaudeRoot/CLAUDE.md at the end of a
-    #       nominal run; -RemoveImport removes it instead of installing.
+    # (C14) install never adds, reads or removes the external import; an existing line is
+    #       preserved; -RemoveImport is no longer a parameter (refused by the parser).
     # =======================================================================
-    Write-Host "-- (C14) P022:A019: @NESTOR.md import added/removed --" -ForegroundColor Cyan
+    Write-Host "-- (C14) external import preserved, -RemoveImport refused --" -ForegroundColor Cyan
     $k14 = New-InstallCase -Name 'c14' -Git
     $claudeMd14 = Join-Path $k14.Live 'CLAUDE.md'
+    [System.IO.File]::WriteAllText($claudeMd14, "@keep-me.md`nmes consignes`n")
     $r14a = Invoke-InstallCase -P @{ SourceRoot = $k14.Ref; ClaudeRoot = $k14.Live }
     Assert-Eq 0 $r14a.Rc "C14a. nominal install: exit 0"
-    Assert-True (Test-Path -LiteralPath $claudeMd14) "C14a. CLAUDE.md created at the end of a nominal run"
     $txt14a = [System.IO.File]::ReadAllText($claudeMd14)
-    Assert-Eq 0 (@([regex]::Matches($txt14a, '(?m)^\s*@NESTOR\.md\s*$')).Count) "C14a. no @NESTOR.md line added (the core import is not part of this repo)"
-    # CLAUDE.md NEVER enters the sync domain (greenlist), even when present.
+    Assert-Eq 1 (@([regex]::Matches($txt14a, '(?m)^\s*@keep-me\.md\s*$')).Count) "C14a. existing import line preserved (count 1)"
+    Assert-True ($txt14a -match 'mes consignes') "C14a. private content preserved"
     $domain14 = @(Get-DomainRelPaths -Root $k14.Live)
     Assert-True (-not ($domain14 -contains 'CLAUDE.md')) "C14a. CLAUDE.md OUTSIDE the sync domain (never in the greenlist)"
-    # 2nd install (idempotent, unchanged checksum): does not duplicate the line.
-    $r14b = Invoke-InstallCase -P @{ SourceRoot = $k14.Ref; ClaudeRoot = $k14.Live }
-    Assert-Eq 0 $r14b.Rc "C14b. 2nd install (already up to date): exit 0"
+    $r14b = Invoke-InstallCase -P @{ SourceRoot = $k14.Ref; ClaudeRoot = $k14.Live; Force = $true }
+    Assert-Eq 0 $r14b.Rc "C14b. --force reinstall: exit 0"
     $txt14b = [System.IO.File]::ReadAllText($claudeMd14)
-    Assert-Eq 0 (@([regex]::Matches($txt14b, '(?m)^\s*@NESTOR\.md\s*$')).Count) "C14b. 2nd install: still no @NESTOR.md line (idempotent)"
-    # -RemoveImport: removes the line and does NOT run the rest of the installation.
-    $r14c = Invoke-InstallCase -P @{ SourceRoot = $k14.Ref; ClaudeRoot = $k14.Live; RemoveImport = $true }
-    Assert-Eq 0 $r14c.Rc "C14c. -RemoveImport: exit 0"
+    Assert-Eq 1 (@([regex]::Matches($txt14b, '(?m)^\s*@keep-me\.md\s*$')).Count) "C14b. still exactly 1 import line"
+    $out14c = & pwsh -NoProfile -File $installPath -ClaudeRoot $k14.Live -RemoveImport 2>&1
+    Assert-True ($LASTEXITCODE -ne 0) "C14c. -RemoveImport refused by the parser (non-zero exit)"
     $txt14c = [System.IO.File]::ReadAllText($claudeMd14)
-    Assert-Eq 0 (@([regex]::Matches($txt14c, '(?m)^\s*@NESTOR\.md\s*$')).Count) "C14c. -RemoveImport: line removed"
-    # -DryRun: 0 writes to CLAUDE.md (C7 already covers the rest of the live tree).
+    Assert-Eq 1 (@([regex]::Matches($txt14c, '(?m)^\s*@keep-me\.md\s*$')).Count) "C14c. import line still there after the refusal"
     $k14d = New-InstallCase -Name 'c14d' -Git
     $claudeMd14d = Join-Path $k14d.Live 'CLAUDE.md'
     $r14d = Invoke-InstallCase -P @{ SourceRoot = $k14d.Ref; ClaudeRoot = $k14d.Live; DryRun = $true }
     Assert-Eq 0 $r14d.Rc "C14d. -DryRun: exit 0"
     Assert-True (-not (Test-Path -LiteralPath $claudeMd14d)) "C14d. -DryRun: CLAUDE.md NOT created"
 
+
     # =======================================================================
-    # (C15) P033:A029 — install calls Set-LocalOverlayImport in addition to Set-NestorImport:
+    # (C15) P033:A029 — install calls Set-LocalOverlayImport (the generic marker import):
     #       CLAUDE.local.md created (empty) on an empty live tree, idempotent on the 2nd run,
     #       never overwritten when it already has private content, -DryRun = 0 writes.
     # =======================================================================

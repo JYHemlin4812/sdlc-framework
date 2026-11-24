@@ -75,10 +75,9 @@ function Test-InSdlcDomain {
     # -ceq/-clike (case-SENSITIVE) everywhere: the source of truth is `git ls-tree`
     # (case-sensitive even on Windows) and the bash mirror uses [[ == ]] / globs /
     # find, all case-sensitive. Otherwise a committed blob with the wrong case
-    # (e.g. claude/nestor.md, agents/Nestor-rh.md) would be in-domain on the PS side
+    # (e.g. claude/SDLC.md, agents/SDLC-rh.md) would be in-domain on the PS side
     # and out-of-domain on the bash side => same inputs, different exit codes (breaks
     # the SP2 parity invariant). Canonical names are all lowercase => 0 regression.
-    # core domain (A018 SP3): the LITERAL NESTOR.md only — no root pattern.
     $seg = $norm -split '/'
     $leaf = $seg[$seg.Length - 1]
     # skills domain: skills/<sdlc*dir>/<file...> (H7), except skills/sdlc/commands/** (H3).
@@ -166,20 +165,18 @@ function Get-GitBlobBytes {
 function Get-DomainCardinalities {
     # From a set of relPaths (sync domain), computes the cardinalities
     # dynamically (skills = number of first-level sdlc* folders, agents = files,
-    # commands = files, core = 0/1 on the literal NESTOR.md — A018 SP3).
+    # commands = files).
     # No hard-coded number.
     param([Parameter(Mandatory)][AllowEmptyCollection()][string[]]$RelPaths)
     Set-StrictMode -Version Latest
     $skillDirs = New-Object 'System.Collections.Generic.HashSet[string]'
     $agents = 0
     $commands = 0
-    $core = 0
     foreach ($rel in $RelPaths) {
         $seg = $rel -split '/'
-        # -ceq/-clike: mirror of the bash awk (case-sensitive: $0=="NESTOR.md",
+        # -ceq/-clike: mirror of the bash awk (case-sensitive: $1=="skills"/"agents",
         # $1=="skills"/"agents", /^commands\/sdlc\//). HashSet[string] = ordinal.
-        if ($rel -ceq 'NESTOR.md') { $core++ }
-        elseif ($seg[0] -ceq 'skills' -and $seg.Length -ge 2) { [void]$skillDirs.Add($seg[1]) }
+        if ($seg[0] -ceq 'skills' -and $seg.Length -ge 2) { [void]$skillDirs.Add($seg[1]) }
         elseif ($seg[0] -ceq 'agents') { $agents++ }
         elseif ($rel -clike 'commands/sdlc/*') { $commands++ }
     }
@@ -187,7 +184,6 @@ function Get-DomainCardinalities {
         Skills   = $skillDirs.Count
         Agents   = $agents
         Commands = $commands
-        Core     = $core
     }
 }
 
@@ -261,13 +257,12 @@ function Invoke-Verify {
     if ($liveCard.Skills   -ne $refCard.Skills)   { $cardDrift.Add(("skills: floor={0} live={1}"   -f $refCard.Skills,   $liveCard.Skills)) }
     if ($liveCard.Agents   -ne $refCard.Agents)   { $cardDrift.Add(("agents: floor={0} live={1}"   -f $refCard.Agents,   $liveCard.Agents)) }
     if ($liveCard.Commands -ne $refCard.Commands) { $cardDrift.Add(("commands: floor={0} live={1}" -f $refCard.Commands, $liveCard.Commands)) }
-    if ($liveCard.Core     -ne $refCard.Core)     { $cardDrift.Add(("core: floor={0} live={1}"     -f $refCard.Core,     $liveCard.Core)) }
 
     # --- Report ----------------------------------------------------------------
     Say ""
     Say ("  ref (committed HEAD) : {0} domain files" -f $refHash.Count)
     Say ("  live (sdlc scope)    : {0} domain files" -f $liveHash.Count)
-    Say ("  derived floors       : skills={0} agents={1} commands={2} core={3}" -f $refCard.Skills, $refCard.Agents, $refCard.Commands, $refCard.Core)
+    Say ("  derived floors       : skills={0} agents={1} commands={2}" -f $refCard.Skills, $refCard.Agents, $refCard.Commands)
 
     foreach ($m in $missing)  { Say ("  [MISSING]      $m") 'Red' }
     foreach ($h in $hashDiff) { Say ("  [HASH DIFF]    $h") 'Red' }

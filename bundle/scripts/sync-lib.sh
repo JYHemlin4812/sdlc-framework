@@ -26,7 +26,7 @@
 #   write_file_atomic       copy_tree
 #   acquire_sync_lock       release_sync_lock
 #   write_sync_manifest     read_sync_manifest    get_first_run_plan
-#   set_generic_import      set_nestor_import     remove_nestor_import
+#   set_generic_import      set_local_overlay_import
 
 # ---------------------------------------------------------------------------
 # 0. Environment helpers (defined on source, no side effect).
@@ -299,6 +299,8 @@ resolve_lww() {
 
 write_file_atomic() {
     local path="$1"
+    # A directory at the destination must fail: mv would otherwise move the temp file INTO it (REV-07).
+    if [[ -d "$path" ]]; then return 1; fi
     local dir; dir=$(dirname "$path")
     [[ -d "$dir" ]] || mkdir -p "$dir"
     # temp in the SAME folder (same volume => atomic rename)
@@ -585,29 +587,26 @@ get_first_run_plan() {
 }
 
 # ---------------------------------------------------------------------------
-# 13. set_nestor_import / remove_nestor_import (P022:A019) — adds/removes the
-#     canonical '@NESTOR.md' line in a GLOBAL USER file (~/.claude/CLAUDE.md),
+# 13. set_generic_import / set_local_overlay_import (P032:A029, P033:A029) — adds a
+#     marker line (e.g. '@CLAUDE.local.md') to a GLOBAL USER file (~/.claude/CLAUDE.md),
 #     OUTSIDE the sync domain (never added to get_domain_relpaths/greenlist).
-#     Detection = count of lines whose TRIMMED content is EXACTLY '@NESTOR.md'
+#     Detection = count of lines whose TRIMMED content is EXACTLY the marker
 #     (literal match, never a broad regex). Atomic write (write_file_atomic) +
 #     timestamped backup (except --dry-run) BEFORE any mutation; NEVER touches
-#     the bytes of other lines. Optional nestor-agents interop.
-#     set_nestor_import wraps set_generic_import (P032:A029), which carries the
-#     same logic parameterized by an explicit --marker (reusable for any future
-#     marker, e.g. a *.local.md overlay).
+#     the bytes of other lines.
 # ---------------------------------------------------------------------------
 
-_nestor_import_lines_from_content() {
-    # Fills the global array _NESTOR_IMPORT_LINES from the STRING $1 (already read),
+_import_lines_from_content() {
+    # Fills the global array _IMPORT_LINES from the STRING $1 (already read),
     # lines keeping their original terminator (CRLF/LF); the last line has NO
     # terminator if the content does not end with an EOL.
-    _NESTOR_IMPORT_LINES=()
+    _IMPORT_LINES=()
     local content="$1"
     [[ -n "$content" ]] || return 0
-    mapfile _NESTOR_IMPORT_LINES < <(printf '%s' "$content")
+    mapfile _IMPORT_LINES < <(printf '%s' "$content")
 }
 
-_nestor_import_trim() {
+_import_trim() {
     # Trim: removes the terminator (\r?\n) then leading/trailing whitespace. Emits on stdout.
     local s="$1"
     s="${s%$'\n'}"; s="${s%$'\r'}"
@@ -616,21 +615,20 @@ _nestor_import_trim() {
     printf '%s' "$s"
 }
 
-_nestor_import_backup() {
+_import_backup() {
     # Timestamped backup (file name UNCHANGED, nested in a unique subfolder) —
     # mirrors the install.sh/restore.sh conventions, avoids any clash with the
     # *.tmp-*/*.bak-* patterns reserved for write_file_atomic's TRANSIENT artifacts.
     local path="$1"
     local dir; dir=$(dirname -- "$path")
     local leaf; leaf=$(basename -- "$path")
-    local backup_dir="$dir/_backups/nestor-import-$(date +%Y%m%d-%H%M%S)-$$-${RANDOM}"
+    local backup_dir="$dir/_backups/import-$(date +%Y%m%d-%H%M%S)-$$-${RANDOM}"
     write_file_atomic "$backup_dir/$leaf" < "$path" >/dev/null
 }
 
 set_generic_import() {
     # Usage: set_generic_import [--dry-run] --marker "<marker>" <path>
-    #   (P032:A029 — body extracted from the former set_nestor_import, parameterized
-    #   by an explicit marker instead of the '@NESTOR.md' literal.)
+    #   (P032:A029 — generic body, parameterized by an explicit --marker.)
     #   count($marker) >= 1 -> no-op (count > 1: stderr warning, NO dedup).
     #   count == 0 -> append at end of file, WITHOUT touching existing bytes;
     #     prefixed with an EOL (file's DOMINANT style: CRLF if CRLF is the majority,
@@ -649,11 +647,11 @@ set_generic_import() {
 
     local content=""
     if [[ -f "$path" ]]; then content=$(cat -- "$path"; printf 'X'); content="${content%X}"; fi
-    _nestor_import_lines_from_content "$content"
+    _import_lines_from_content "$content"
 
     local raw trimmed count=0
-    for raw in "${_NESTOR_IMPORT_LINES[@]}"; do
-        trimmed=$(_nestor_import_trim "$raw")
+    for raw in "${_IMPORT_LINES[@]}"; do
+        trimmed=$(_import_trim "$raw")
         [[ "$trimmed" == "$marker" ]] && count=$((count + 1))
     done
 
@@ -666,7 +664,7 @@ set_generic_import() {
 
     # count == 0: build the content to write (file's dominant EOL style).
     local crlf_n=0 lf_n=0
-    for raw in "${_NESTOR_IMPORT_LINES[@]}"; do
+    for raw in "${_IMPORT_LINES[@]}"; do
         if [[ "$raw" == *$'\r\n' ]]; then crlf_n=$((crlf_n + 1))
         elif [[ "$raw" == *$'\n' ]];  then lf_n=$((lf_n + 1)); fi
     done
@@ -684,15 +682,8 @@ set_generic_import() {
 
     [[ $dryrun -eq 1 ]] && return 0
 
-    [[ -f "$path" ]] && _nestor_import_backup "$path"
+    [[ -f "$path" ]] && _import_backup "$path"
     printf '%s' "$newcontent" | write_file_atomic "$path" >/dev/null
-}
-
-set_nestor_import() {
-    # Usage: set_nestor_import [--dry-run] <path>
-    # Adds the canonical '@NESTOR.md' line to <path>. Wrapper of set_generic_import
-    # (P032:A029) — byte-identical behavior to the original implementation.
-    set_generic_import --marker '@NESTOR.md' "$@"
 }
 
 set_local_overlay_import() {
@@ -727,41 +718,6 @@ set_local_overlay_import() {
     else
         set_generic_import --marker "@$localname" "$path"
     fi
-}
-
-remove_nestor_import() {
-    # Usage: remove_nestor_import [--dry-run] <path>
-    # Removes ALL lines whose trimmed content is EXACTLY '@NESTOR.md', and ONLY
-    # those: the rest of the file stays byte-identical. Missing file ->
-    # no-op. --dry-run: 0 writes.
-    local dryrun=0 path=""
-    while [[ $# -gt 0 ]]; do
-        case "$1" in
-            --dry-run) dryrun=1; shift ;;
-            *)         path="$1"; shift ;;
-        esac
-    done
-    [[ -n "$path" ]] || { printf 'remove_nestor_import: path required\n' >&2; return 2; }
-    [[ -f "$path" ]] || return 0
-
-    local content; content=$(cat -- "$path"; printf 'X'); content="${content%X}"
-    _nestor_import_lines_from_content "$content"
-
-    local raw trimmed newcontent="" removed_any=0
-    for raw in "${_NESTOR_IMPORT_LINES[@]}"; do
-        trimmed=$(_nestor_import_trim "$raw")
-        if [[ "$trimmed" == '@NESTOR.md' ]]; then
-            removed_any=1
-            continue
-        fi
-        newcontent="${newcontent}${raw}"
-    done
-
-    [[ $removed_any -eq 1 ]] || return 0
-    [[ $dryrun -eq 1 ]] && return 0
-
-    _nestor_import_backup "$path"
-    printf '%s' "$newcontent" | write_file_atomic "$path" >/dev/null
 }
 
 # ---------------------------------------------------------------------------

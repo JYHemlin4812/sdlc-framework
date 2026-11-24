@@ -11,10 +11,8 @@
     Override: -Discover (expert mode, removes by naming convention).
 
     P025:A023 - -RemoveCore (additive flag, OPT-IN): on top of the default behavior
-    (skills + commands/sdlc/), also removes the claude/agents/{sdlc-*,nestor-*}
-    agents and the NESTOR.md core PRESENT IN LIVE, in the SAME backup/removal pass,
-    then removes the '@NESTOR.md' import from the personal CLAUDE.md
-    (Remove-NestorImport, single source sync-lib.ps1). Without the flag: behavior
+    (skills + commands/sdlc/), also removes the claude/agents/sdlc-* agents PRESENT
+    IN LIVE, in the SAME backup/removal pass. CLAUDE.md is never modified. Without the flag: behavior
     STRICTLY identical to before (agents and core untouched) - non-regression.
 
     The agents/core scope is DERIVED from Get-DomainRelPaths (sync-lib, single
@@ -31,8 +29,8 @@
     commands/sdlc/). Expert mode.
 
 .PARAMETER RemoveCore
-    Also removes the sdlc-*/nestor-* agents and NESTOR.md present in live, then
-    the '@NESTOR.md' import from the personal CLAUDE.md. Default: off (non-regression).
+    Also removes the sdlc-* agents present in live. CLAUDE.md is never modified.
+    Default: off (non-regression).
 
 .EXAMPLE
     pwsh ./scripts/uninstall.ps1
@@ -49,7 +47,7 @@ param(
     [switch]$RemoveCore
 )
 
-# --- Shared foundation (single source A002/A004; Get-DomainRelPaths, Remove-NestorImport) ---
+# --- Shared foundation (single source A002/A004; Get-DomainRelPaths) ---
 . (Join-Path $PSScriptRoot 'sync-lib.ps1')
 
 $SKILLS_DEFAULT = @("sdlc", "sdlc-wave-orchestrator", "sdlc-lang-dispatcher", "sdlc-asvs-auditor")
@@ -76,6 +74,61 @@ function Get-CanonicalPath {
     if (Test-Path -LiteralPath $Path) { return (Get-Item -LiteralPath $Path).FullName }
     return [System.IO.Path]::GetFullPath($Path)
 }
+
+# Removes ONLY the files that belong to the bundle (Get-DomainRelPaths, plus the install
+# manifest). A personal file added in the directory is kept and reported; the directory
+# is removed only if it ends up empty (T6: no more recursive delete of a whole folder).
+function Get-ExpectedFileHashes {
+    # path (relative to ClaudeRoot, '/') -> sha256, from the install manifest ("file_hashes").
+    # $null when the manifest has no per-file record (legacy install).
+    param([Parameter(Mandatory)][string]$Root)
+    Set-StrictMode -Version Latest
+    $mf = Join-Path $Root 'skills\sdlc\.install-manifest.json'
+    if (-not (Test-Path -LiteralPath $mf)) { return $null }
+    $json = Get-Content -LiteralPath $mf -Encoding UTF8 -Raw | ConvertFrom-Json
+    if (-not $json.PSObject.Properties['file_hashes']) { return $null }
+    $map = @{}
+    foreach ($p in $json.file_hashes.PSObject.Properties) { $map[$p.Name] = [string]$p.Value }
+    return $map
+}
+
+function Test-OwnedFile {
+    # $true when the file may be removed: no per-file record (legacy), or its hash matches.
+    param([Parameter(Mandatory)][string]$Path, [Parameter(Mandatory)][string]$Root, $Expected)
+    Set-StrictMode -Version Latest
+    if ($null -eq $Expected) { return $true }
+    $rootFull = (Get-Item -LiteralPath $Root).FullName.TrimEnd('\')
+    $rel = $Path.Substring($rootFull.Length + 1) -replace '\\', '/'
+    if (-not $Expected.ContainsKey($rel)) { return $false }
+    return ($Expected[$rel] -eq (Get-FileHashByteExact -Path $Path))
+}
+
+# Removes ONLY the files that belong to the bundle (Get-DomainRelPaths) and whose hash matches
+# the manifest (file_hashes), plus the install manifest. A personal or modified file is kept
+# and reported; the directory is removed only if it ends up empty (T6, T10-independent).
+function Remove-OwnedTree {
+    param([Parameter(Mandatory)][string]$Dir, [Parameter(Mandatory)][string]$Root, $Expected)
+    Set-StrictMode -Version Latest
+    $expected = $Expected
+    $rootFull = (Get-Item -LiteralPath $Root).FullName
+    $owned = New-Object 'System.Collections.Generic.HashSet[string]' ([System.StringComparer]::OrdinalIgnoreCase)
+    foreach ($rel in @(Get-DomainRelPaths -Root $Root)) { [void]$owned.Add((Join-Path $rootFull ($rel -replace '/', '\'))) }
+    foreach ($f in @(Get-ChildItem -LiteralPath $Dir -Recurse -File -Force)) {
+        if ($f.Name -eq '.install-manifest.json' -or ($owned.Contains($f.FullName) -and (Test-OwnedFile -Path $f.FullName -Root $Root -Expected $expected))) {
+            Write-Step "rm -f $($f.FullName)"
+            Remove-Item -LiteralPath $f.FullName -Force
+        }
+        else { Write-Warn "kept (not from the bundle, or modified): $($f.FullName)" }
+    }
+    Get-ChildItem -LiteralPath $Dir -Recurse -Directory -Force |
+        Sort-Object { $_.FullName.Length } -Descending |
+        ForEach-Object { if (-not (Get-ChildItem -LiteralPath $_.FullName -Force)) { Remove-Item -LiteralPath $_.FullName -Force } }
+    if (Test-Path -LiteralPath $Dir) {
+        if (Get-ChildItem -LiteralPath $Dir -Force) { Write-Warn "kept (not empty): $Dir" }
+        else { Remove-Item -LiteralPath $Dir -Force }
+    }
+}
+
 
 function Invoke-Uninstall {
     param(
@@ -122,21 +175,21 @@ function Invoke-Uninstall {
     $backupName = @{}
     foreach ($skill in $skills) {
         $p = Join-Path $targetSkillsDir $skill
-        if (Test-Path $p) { $toRemove += $p; $backupName[$p] = $skill }
+        if (Test-Path $p) { $toRemove += $p; $backupName[$p] = (Join-Path 'skills' $skill) }
     }
     if (Test-Path $targetCommandsDir) {
         $toRemove += $targetCommandsDir
-        $backupName[$targetCommandsDir] = (Split-Path -Leaf $targetCommandsDir)
+        $backupName[$targetCommandsDir] = (Join-Path 'commands' (Split-Path -Leaf $targetCommandsDir))
     }
 
-    # --- P025:A023: -RemoveCore - sdlc-*/nestor-* agents + NESTOR.md core IN LIVE.
+    # --- P025:A023: -RemoveCore - sdlc-* agents IN LIVE.
     #     Scope DERIVED from Get-DomainRelPaths (never a hard-coded list of names, M4).
     #     Backup name = full relPath (avoids any basename collision between agents
     #     in different subfolders, see the recursive get_domain_relpaths).
     if ($RemoveCore -and (Test-Path -LiteralPath $ClaudeRoot)) {
         $sep = [string][System.IO.Path]::DirectorySeparatorChar
         foreach ($rel in @(Get-DomainRelPaths -Root $ClaudeRoot)) {
-            if ($rel -ne 'NESTOR.md' -and $rel -notlike 'agents/*') { continue }
+            if ($rel -notlike 'agents/*' -or (Split-Path -Leaf $rel) -notlike 'sdlc-*') { continue }
             $native = $rel -replace '/', $sep
             $full = Join-Path $ClaudeRoot $native
             if ((Test-Path -LiteralPath $full) -and (-not $backupName.ContainsKey($full))) {
@@ -149,6 +202,12 @@ function Invoke-Uninstall {
     if ($toRemove.Count -eq 0) {
         Write-Warn "No SDLC artifact found under $ClaudeRoot. Nothing to remove."
         return 0
+    }
+
+    # Loaded ONCE, before anything is removed: the skill folder (which holds the manifest) goes first.
+    $expectedHashes = Get-ExpectedFileHashes -Root $ClaudeRoot
+    if ($null -eq $expectedHashes) {
+        Write-Warn "Legacy install (manifest has no file_hashes): every file in the SDLC folders will be removed, personal files included. A backup is made first."
     }
 
     Write-Host ""
@@ -186,8 +245,14 @@ function Invoke-Uninstall {
     # --- 5. Targeted removal ---
     Write-Header "Removal"
     foreach ($p in $toRemove) {
-        Write-Step "rm -rf $p"
-        Remove-Item -Path $p -Recurse -Force
+        if (Test-Path -LiteralPath $p -PathType Container) {
+            Remove-OwnedTree -Dir $p -Root $ClaudeRoot -Expected $expectedHashes
+        }
+        elseif (Test-OwnedFile -Path $p -Root $ClaudeRoot -Expected $expectedHashes) {
+            Write-Step "rm -f $p"
+            Remove-Item -LiteralPath $p -Force
+        }
+        else { Write-Warn "kept (modified or not from the bundle): $p" }
     }
 
     # --- 6. Remove commands/ if empty ---
@@ -195,16 +260,6 @@ function Invoke-Uninstall {
     if ((Test-Path -LiteralPath $commandsParent) -and (@(Get-ChildItem -Path $commandsParent).Count -eq 0)) {
         Write-Step "Removing empty commands/"
         Remove-Item -Path $commandsParent -Force
-    }
-
-    # --- 7. -RemoveCore: remove the '@NESTOR.md' import from the personal CLAUDE.md ---
-    #     Same EXACT resolution as install.ps1 -RemoveImport (Get-CanonicalPath +
-    #     Join-Path ClaudeRoot 'CLAUDE.md') so the same file is targeted.
-    if ($RemoveCore) {
-        $rmClaudeRoot = Get-CanonicalPath -Path $ClaudeRoot
-        $rmClaudeMd = Join-Path $rmClaudeRoot 'CLAUDE.md'
-        Remove-NestorImport -Path $rmClaudeMd
-        Write-Ok "Import '@NESTOR.md' removed (if present): $rmClaudeMd"
     }
 
     Write-Header "Uninstall complete"

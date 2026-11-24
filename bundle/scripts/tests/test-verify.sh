@@ -183,33 +183,9 @@ af "T8 test_in_sdlc_domain('skills/sdlc-standalone.md') = False" \
 at "T8 test_in_sdlc_domain('skills/sdlc/SKILL.md') = True" \
     test_in_sdlc_domain 'skills/sdlc/SKILL.md'
 
-# === T9: P021:A018 extension — core domain + nestor-* pattern =================
-# (T1 already proves: byte-identical NESTOR.md + agents/nestor-* => exit 0,
-#  and a committed root OTHER.md is never flagged missing.)
-reset_live
-# T9a: the core domain cardinality appears in the report (derived 0/1).
-out9="$(invoke_verify --ref-root "$REF" --live-root "$LIVE")"
-at "T9a verify report: core domain cardinality shown (core=0)" \
-    grep -q 'core=0' <<< "$out9"
-at "T9a core cardinality next to skills/agents/commands" \
-    grep -Eq 'skills=[0-9]+ agents=[0-9]+ commands=[0-9]+ core=[0-9]+' <<< "$out9"
-# T9d: git-tree projection == FS classifier on the new domains
-af "T9d test_in_sdlc_domain('NESTOR.md') = False (Nestor core outside the SDLC domain)" \
-    test_in_sdlc_domain 'NESTOR.md'
-af "T9d test_in_sdlc_domain('OTHER.md') = False (no open root pattern)" \
-    test_in_sdlc_domain 'OTHER.md'
-af "T9d test_in_sdlc_domain('agents/nestor-analyste.md') = False (nestor-* agents outside the SDLC domain)" \
-    test_in_sdlc_domain 'agents/nestor-analyste.md'
-af "T9d test_in_sdlc_domain('agents/other-agent.md') = False (no matching pattern)" \
-    test_in_sdlc_domain 'agents/other-agent.md'
-
 # === T9e: CASE parity (SP3 adversarial review) — case-SENSITIVE classification
 #     aligned on git ls-tree + PS (-ceq/-clike). A wrong spelling is outside the
 #     domain on BOTH sides (otherwise PS/bash exit codes diverge on the same repo). ==
-af "T9e 'nestor.md' (wrong case) = False (case-sensitive NESTOR.md literal)" \
-    test_in_sdlc_domain 'nestor.md'
-af "T9e 'agents/Nestor-rh.md' (wrong case) = False (case-sensitive nestor-* pattern)" \
-    test_in_sdlc_domain 'agents/Nestor-rh.md'
 af "T9e 'agents/SDLC-py.md' (wrong case) = False (case-sensitive sdlc-* pattern)" \
     test_in_sdlc_domain 'agents/SDLC-py.md'
 af "T9e 'skills/SDLC-x/SKILL.md' (wrong case) = False (case-sensitive skill folder)" \

@@ -7,7 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+- Removed every reference to components outside this repository: the interop document, the import line in `CLAUDE.md` (the installer no longer adds, reads or removes it, and keeps it when present), the `--remove-import` option, the external agents and core file in `--remove-core` (which now removes only the `sdlc-*` agents), and the zone of `scan-fuites` that matched an external folder.
+
+### Changed
+- Uninstall removes only the bundle files whose hash matches the install manifest (`file_hashes`); a personal or hand-modified file in an SDLC folder is kept and reported. An older install whose manifest has no `file_hashes` keeps the previous behavior, with a warning before removal.
+
 ### Fixed
+- `planchers.assert.ps1` no longer crashes on the removed `core` counter; pinned floors updated to the current domain (14 skills, 12 agents, 19 commands).
 - AQ Gate (`check_sdlc.py`) now depends on `documentation_tier`. A standard project initialised
   with the untouched templates used to pass (exit 0); unfilled template placeholders are now
   errors at every tier except `none` and absent. The `minimal` tier checks `HANDOFF.md` and

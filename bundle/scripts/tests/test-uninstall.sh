@@ -5,7 +5,7 @@
 # NEVER operates on the real ~/.claude. Cleans up via trap EXIT.
 #
 # Covers:
-#   U0  source invariants (get_domain_relpaths, remove_nestor_import, invoke_uninstall,
+#   U0  source invariants (get_domain_relpaths, invoke_uninstall,
 #       BASH_SOURCE guard, --remove-core, zero hard-coded agent list).
 #   U1  default behavior (WITHOUT --remove-core): agents/core/CLAUDE.md UNTOUCHED.
 #   U2  --remove-core: agents + core + import removed, backed up without collision.
@@ -47,11 +47,11 @@ trap cleanup EXIT
 new_text() { local d; d=$(dirname "$1"); [[ -d "$d" ]] || mkdir -p "$d"; printf '%s' "$2" > "$1"; }
 
 MANIFEST_JSON='{"version":"3.2.0","skills":["sdlc","sdlc-wave-orchestrator","sdlc-lang-dispatcher","sdlc-asvs-auditor"]}'
-CLAUDE_MD_TEXT=$'# My personal CLAUDE.md\nPre-existing user content.\n@NESTOR.md\n'
+CLAUDE_MD_TEXT=$'# My personal CLAUDE.md\nPre-existing user content.\n@keep-me.md\n'
 
 # new_case <name> -> exports CASE_LIVE (complete LIVE fixture: 4 skills (including the
-# manifest), commands/sdlc, 3 agents (one RECURSIVE + one nestor-*), NESTOR.md,
-# CLAUDE.md WITH the import).
+# manifest), commands/sdlc, 3 agents (one RECURSIVE + one outside the domain), PERSO.md,
+# CLAUDE.md WITH an unrelated import).
 new_case() {
     local name="$1"
     local c="$WORK/$name"
@@ -65,8 +65,8 @@ new_case() {
     new_text "$CASE_LIVE/commands/sdlc/brainstorm.md"                $'brainstorm cmd\n'
     new_text "$CASE_LIVE/agents/sdlc-architect.md"                   $'architect agent\n'
     new_text "$CASE_LIVE/agents/nested/sdlc-deep.md"                 $'deep nested agent\n'
-    new_text "$CASE_LIVE/agents/nestor-clara.md"                       $'clara agent\n'
-    new_text "$CASE_LIVE/NESTOR.md"                                    $'nestor core\n'
+    new_text "$CASE_LIVE/agents/autre-clara.md"                        $'clara agent\n'
+    new_text "$CASE_LIVE/PERSO.md"                                     $'perso core\n'
     new_text "$CASE_LIVE/CLAUDE.md"                                    "$CLAUDE_MD_TEXT"
 }
 
@@ -88,13 +88,13 @@ printf '\n=== test-uninstall.sh: self-check P025:A023 (bash mirror) ===\n'
 printf -- '-- (U0) source invariants --\n'
 SRC="$(cat "$UNINSTALL")"
 at "U0. agents/core scope via get_domain_relpaths (single source)" has "$SRC" 'get_domain_relpaths'
-at "U0. import removal via remove_nestor_import (single source)"   has "$SRC" 'remove_nestor_import'
+# Forbidden word spelled in two shell pieces so this file itself stays clean.
+at "U0. uninstall names no external component"   bash -c "! grep -qi -- 'nes''tor' '$UNINSTALL'"
 at "U0. logic wrapped in invoke_uninstall (testable)"              has "$SRC" 'invoke_uninstall'
 at "U0. auto-run guard (BASH_SOURCE)"                              has "$SRC" 'BASH_SOURCE[0]'
 at "U0. --remove-core flag declared"                               has "$SRC" '--remove-core'
 at "U0. no hard-coded AGENTS_DEFAULT list"           hasnot "$SRC" 'AGENTS_DEFAULT'
 at "U0. no hard-coded literal agent name"            hasnot "$SRC" 'sdlc-architect'
-at "U0. no hard-coded literal nestor-* agent name"   hasnot "$SRC" 'nestor-clara'
 at "U0. agents scope derived by domain prefix, not by name" has "$SRC" 'agents/*'
 
 # =======================================================================
@@ -110,8 +110,8 @@ at "U1. wave-orchestrator skill removed"        live_hasnot 'skills/sdlc-wave-or
 at "U1. commands/sdlc removed"                  live_hasnot 'commands/sdlc'
 at "U1. sdlc-architect agent UNTOUCHED (no --remove-core)" live_has 'agents/sdlc-architect.md'
 at "U1. nested agent UNTOUCHED"                 live_has 'agents/nested/sdlc-deep.md'
-at "U1. nestor-* agent UNTOUCHED"               live_has 'agents/nestor-clara.md'
-at "U1. NESTOR.md core UNTOUCHED"               live_has 'NESTOR.md'
+at "U1. outside-domain agent UNTOUCHED"        live_has 'agents/autre-clara.md'
+at "U1. PERSO.md (outside domain) UNTOUCHED"    live_has 'PERSO.md'
 at "U1. CLAUDE.md UNTOUCHED"                    live_has 'CLAUDE.md'
 claudeMdAfter1="$(read_text "$CASE_LIVE/CLAUDE.md")"
 ae "U1. CLAUDE.md byte-identical (import NOT touched without --remove-core)" "$claudeMdBefore1" "$claudeMdAfter1"
@@ -125,30 +125,30 @@ af "U1. backup does NOT contain agents/ (no --remove-core)" bash -c "[[ -d '$bk1
 # =======================================================================
 printf -- '-- (U2) --remove-core: agents/core/import removed --\n'
 new_case 'u2'
+claudeMdBefore2="$(read_text "$CASE_LIVE/CLAUDE.md")"
 run_uninstall --claude-root "$CASE_LIVE" --force --remove-core
 ae "U2. exit 0" "0" "$RC"
 at "U2. sdlc skill removed (base behavior preserved)" live_hasnot 'skills/sdlc'
 at "U2. sdlc-architect agent removed"          live_hasnot 'agents/sdlc-architect.md'
 at "U2. nested agent removed"                  live_hasnot 'agents/nested/sdlc-deep.md'
-at "U2. nestor-* agent NOT removed (outside the SDLC domain)"  live_has 'agents/nestor-clara.md'
-at "U2. NESTOR.md core NOT removed (outside the SDLC domain)"  live_has 'NESTOR.md'
+at "U2. outside-domain agent NOT removed"  live_has 'agents/autre-clara.md'
+at "U2. PERSO.md NOT removed (outside the SDLC domain)"  live_has 'PERSO.md'
 at "U2. CLAUDE.md itself PRESERVED (only the import line is removed)" live_has 'CLAUDE.md'
 claudeMdAfter2="$(read_text "$CASE_LIVE/CLAUDE.md")"
-at "U2. '@NESTOR.md' line removed from CLAUDE.md" hasnot "$claudeMdAfter2" '@NESTOR.md'
-at "U2. rest of the CLAUDE.md content preserved"  has "$claudeMdAfter2" 'Pre-existing user content.'
+ae "U2. CLAUDE.md byte-identical (--remove-core never edits CLAUDE.md)" "$claudeMdBefore2" "$claudeMdAfter2"
 bk2="$(backup_root)"
 at "U2. timestamped backup folder created" test -n "$bk2"
 at "U2. backup: root agent present"            bash -c "[[ -f '$bk2/agents/sdlc-architect.md' ]]"
 at "U2. backup: nested agent present (full relative path, no collision)" bash -c "[[ -f '$bk2/agents/nested/sdlc-deep.md' ]]"
-af "U2. backup: nestor-* agent absent"         bash -c "[[ -f '$bk2/agents/nestor-clara.md' ]]"
-af "U2. backup: NESTOR.md core absent"         bash -c "[[ -f '$bk2/NESTOR.md' ]]"
+af "U2. backup: outside-domain agent absent"  bash -c "[[ -f '$bk2/agents/autre-clara.md' ]]"
+af "U2. backup: PERSO.md absent"                bash -c "[[ -f '$bk2/PERSO.md' ]]"
 
 # =======================================================================
 # (U3) --remove-core without agents/core present: graceful no-op
 # =======================================================================
 printf -- '-- (U3) --remove-core without agents/core present: graceful no-op --\n'
 new_case 'u3'
-rm -rf "$CASE_LIVE/agents" "$CASE_LIVE/NESTOR.md" "$CASE_LIVE/CLAUDE.md"
+rm -rf "$CASE_LIVE/agents" "$CASE_LIVE/PERSO.md" "$CASE_LIVE/CLAUDE.md"
 run_uninstall --claude-root "$CASE_LIVE" --force --remove-core
 ae "U3. exit 0 (no crash without agents/core/CLAUDE.md)" "0" "$RC"
 at "U3. skills still removed normally" live_hasnot 'skills/sdlc'

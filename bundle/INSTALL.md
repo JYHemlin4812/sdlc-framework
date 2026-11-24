@@ -48,7 +48,6 @@ bash bundle/scripts/install.sh
 | `-NoBackup` / `--no-backup` | Skip the backup before replacing files (not recommended). |
 | `-ClaudeRoot <path>` / `--claude-root <path>` | Target directory (default: `~/.claude`). |
 | `-SourceRoot <path>` / `--source-root <path>` | Source directory (default: `claude/` at the repository root). |
-| `-RemoveImport` / `--remove-import` | Only remove the `@NESTOR.md` import line from `~/.claude/CLAUDE.md`, then exit (optional `nestor-agents` interop). |
 
 ### What gets installed
 
@@ -151,7 +150,7 @@ Behavior:
 |---|---|
 | `-Force` / `--force` | No interactive confirmation. |
 | `-Discover` / `--discover` | Expert mode when the manifest is missing. |
-| `-RemoveCore` / `--remove-core` | Also remove the installed `sdlc-*` / `nestor-*` agents and `NESTOR.md`, and the `@NESTOR.md` import in `CLAUDE.md` (optional `nestor-agents` interop). |
+| `-RemoveCore` / `--remove-core` | Also remove the installed `sdlc-*` agents and the SDLC skills and commands. Other files, including `CLAUDE.md`, are left as they are. |
 
 ---
 

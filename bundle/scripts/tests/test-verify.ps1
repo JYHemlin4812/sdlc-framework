@@ -202,33 +202,9 @@ try {
     Assert-True -Condition (Test-InSdlcDomain -RelPath 'skills/sdlc/SKILL.md') `
         -Name "T8 Test-InSdlcDomain('skills/sdlc/SKILL.md') = True (legitimate skill kept)"
 
-    # === T9: P021:A018 extension — core domain + nestor-* pattern =============
-    # (T1 already proves: byte-identical NESTOR.md + agents/nestor-* => exit 0,
-    #  and a committed root OTHER.md is never flagged missing.)
-    Reset-Live
-    # T9a: the core domain cardinality appears in the report
-    #      (next to skills/agents/commands), derived value 0/1.
-    $streamed9 = Invoke-Verify -RefRoot $refRoot -LiveRoot $liveRoot *>&1
-    $text9 = (@($streamed9 | Where-Object { $_ -isnot [int] }) | ForEach-Object { $_.ToString() }) -join "`n"
-    Assert-True -Condition ($text9 -match 'core=0') -Name "T9a verify report: core domain cardinality shown (core=0)"
-    Assert-True -Condition ($text9 -match 'skills=\d+ agents=\d+ commands=\d+ core=\d+') -Name "T9a core cardinality next to skills/agents/commands"
-    # T9d: git-tree projection == FS classifier on the new domains
-    Assert-True -Condition (-not (Test-InSdlcDomain -RelPath 'NESTOR.md')) `
-        -Name "T9d Test-InSdlcDomain('NESTOR.md') = False (outside the SDLC domain)"
-    Assert-True -Condition (-not (Test-InSdlcDomain -RelPath 'OTHER.md')) `
-        -Name "T9d Test-InSdlcDomain('OTHER.md') = False (no open root pattern)"
-    Assert-True -Condition (-not (Test-InSdlcDomain -RelPath 'agents/nestor-analyste.md')) `
-        -Name "T9d Test-InSdlcDomain('agents/nestor-analyste.md') = False (outside the SDLC domain)"
-    Assert-True -Condition (-not (Test-InSdlcDomain -RelPath 'agents/other-agent.md')) `
-        -Name "T9d Test-InSdlcDomain('agents/other-agent.md') = False (no matching pattern)"
-
     # === T9e: CASE parity (SP3 adversarial review) — case-SENSITIVE classification
     #     aligned on git ls-tree + bash. A wrong spelling is outside the domain on
     #     BOTH sides (otherwise PS/bash exit codes diverge on the same repo). ======
-    Assert-True -Condition (-not (Test-InSdlcDomain -RelPath 'nestor.md')) `
-        -Name "T9e 'nestor.md' (wrong case) = False (case-sensitive NESTOR.md literal)"
-    Assert-True -Condition (-not (Test-InSdlcDomain -RelPath 'agents/Nestor-rh.md')) `
-        -Name "T9e 'agents/Nestor-rh.md' (wrong case) = False (case-sensitive nestor-* pattern)"
     Assert-True -Condition (-not (Test-InSdlcDomain -RelPath 'agents/SDLC-py.md')) `
         -Name "T9e 'agents/SDLC-py.md' (wrong case) = False (case-sensitive sdlc-* pattern)"
     Assert-True -Condition (-not (Test-InSdlcDomain -RelPath 'skills/SDLC-x/SKILL.md')) `

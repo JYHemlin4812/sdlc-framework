@@ -138,12 +138,10 @@ if [[ -d "$realRef" ]]; then
     realGreen=$(get_domain_relpaths "$realRef")
     realCmd=$(printf '%s\n' "$realGreen" | grep -c '^commands/sdlc/')
     realAgents=$(printf '%s\n' "$realGreen" | grep -c '^agents/')
-    realCore=$(printf '%s\n' "$realGreen" | grep -cx 'NESTOR.md')
     ae "C1. real ref: 14 sdlc* skills (derived)"     14 "$realSkills"
     ae "C1. real ref: 19 commands (derived)"         19 "$realCmd"
     ae "C1. real ref: 12 agents (sdlc-*, derived)"   12 "$realAgents"
-    ae "C1. real ref: 0 NESTOR.md core (outside the SDLC domain)" 0 "$realCore"
-else
+    else
     printf '  (C1 skipped: real ref not found at %s)\n' "$realRef"
 fi
 
@@ -312,44 +310,42 @@ ae "C13. initial install: exit 0" 0 "$RC"
 run_install --source-root "$CASE_REF" --claude-root "$CASE_LIVE" --force --no-backup
 ae "C13. --force --no-backup: exit 0" 0 "$RC"
 # --no-backup ONLY governs the backup of DOMAIN files ('sdlc-' prefix) — separate from
-# the independent set_generic_import backup ('nestor-import-' prefix, P022/A019, never
-# gated by --no-backup), which can legitimately appear here: the 1st install adds 2 markers
-# (@NESTOR.md + @CLAUDE.local.md, P033:A029) to a freshly created CLAUDE.md, and the 2nd
-# marker finds an "existing" file (created by the 1st call in the same run).
+# the independent set_generic_import backup ('import-' prefix, never
+# gated by --no-backup), which can legitimately appear here: the install adds the
+# @CLAUDE.local.md marker (P033:A029) to CLAUDE.md, and a repeated call finds it existing.
 domainBackups13=$(find "$CASE_LIVE/_backups" -maxdepth 1 -type d -name 'sdlc-*' 2>/dev/null | wc -l)
 ae "C13. F8: --no-backup -> no DOMAIN backup folder (sdlc-*) created" 0 "$domainBackups13"
 at "C13. F8: deployment done despite --no-backup"   live_has 'skills/sdlc/SKILL.md'
 
 # =======================================================================
-# (C14) P022:A019 — install no longer adds the '@NESTOR.md' import to
-#       CLAUDE_ROOT/CLAUDE.md; --remove-import removes it instead of installing.
+# (C14) install never adds, reads or removes the external '@keep-me.md' import;
+#       an existing line is preserved; --remove-import is no longer an option.
 # =======================================================================
-printf -- '-- (C14) P022:A019: @NESTOR.md import added/removed --\n'
+printf -- '-- (C14) external import preserved, --remove-import refused --\n'
 new_case c14 git
 CLAUDE_MD14="$CASE_LIVE/CLAUDE.md"
+new_text "$CLAUDE_MD14" $'@keep-me.md\nmes consignes\n'
 run_install --source-root "$CASE_REF" --claude-root "$CASE_LIVE"
 ae "C14a. nominal install: exit 0" 0 "$RC"
-at "C14a. CLAUDE.md created at the end of a nominal run" test -f "$CLAUDE_MD14"
-ae "C14a. install no longer adds @NESTOR.md (0 lines)" 0 "$(grep -c -E '^[[:space:]]*@NESTOR\.md[[:space:]]*$' "$CLAUDE_MD14")"
+ae "C14a. existing @keep-me.md line preserved (count 1)" 1 "$(grep -c -E '^[[:space:]]*@keep-me\.md[[:space:]]*$' "$CLAUDE_MD14")"
+at "C14a. private content preserved" has "$(cat "$CLAUDE_MD14")" 'mes consignes'
 DOMAIN14=$(get_domain_relpaths "$CASE_LIVE")
 at "C14a. CLAUDE.md OUTSIDE the sync domain (never in the greenlist)" hasnot "$DOMAIN14" 'CLAUDE.md'
-# 2nd install (idempotent, unchanged checksum): does not duplicate the line.
-run_install --source-root "$CASE_REF" --claude-root "$CASE_LIVE"
-ae "C14b. 2nd install (already up to date): exit 0" 0 "$RC"
-ae "C14b. 2nd install: still 0 @NESTOR.md lines" 0 "$(grep -c -E '^[[:space:]]*@NESTOR\.md[[:space:]]*$' "$CLAUDE_MD14")"
-# --remove-import: removes the line and does NOT run the rest of the installation.
+run_install --source-root "$CASE_REF" --claude-root "$CASE_LIVE" --force
+ae "C14b. --force reinstall: exit 0" 0 "$RC"
+ae "C14b. still exactly 1 @keep-me.md line" 1 "$(grep -c -E '^[[:space:]]*@keep-me\.md[[:space:]]*$' "$CLAUDE_MD14")"
 run_install --source-root "$CASE_REF" --claude-root "$CASE_LIVE" --remove-import
-ae "C14c. --remove-import: exit 0" 0 "$RC"
-ae "C14c. --remove-import: line removed" 0 "$(grep -c -E '^[[:space:]]*@NESTOR\.md[[:space:]]*$' "$CLAUDE_MD14")"
-# --dry-run: 0 writes to CLAUDE.md (C7 already covers the rest of the live tree).
+ae "C14c. --remove-import refused as unknown option (exit 2)" 2 "$RC"
+ae "C14c. @keep-me.md line still there after the refusal" 1 "$(grep -c -E '^[[:space:]]*@keep-me\.md[[:space:]]*$' "$CLAUDE_MD14")"
 new_case c14d git
 CLAUDE_MD14D="$CASE_LIVE/CLAUDE.md"
 run_install --source-root "$CASE_REF" --claude-root "$CASE_LIVE" --dry-run
 ae "C14d. --dry-run: exit 0" 0 "$RC"
 af "C14d. --dry-run: CLAUDE.md NOT created" test -f "$CLAUDE_MD14D"
 
+
 # =======================================================================
-# (C15) P033:A029 — install calls set_local_overlay_import in addition to set_nestor_import:
+# (C15) P033:A029 — install calls set_local_overlay_import (the generic marker import):
 #       CLAUDE.local.md created (empty) on an empty live tree, idempotent on the 2nd run,
 #       never overwritten when it already has private content, --dry-run = 0 writes.
 # =======================================================================

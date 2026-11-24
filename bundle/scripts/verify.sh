@@ -49,8 +49,6 @@ test_in_sdlc_domain() {
     [[ -z "$norm" ]] && return 1
     test_sync_excluded "$norm" && return 1
 
-    # core domain (A018 SP3): the LITERAL NESTOR.md only — no root pattern.
-
     local leaf="${norm##*/}"
     local nseg=1 rest="$norm"
     while [[ "$rest" == */* ]]; do rest="${rest#*/}"; nseg=$((nseg+1)); done
@@ -110,16 +108,15 @@ git_blob_sha256() {
 }
 
 get_domain_cardinalities() {
-    # Reads relPaths (one per line) on stdin; prints "skills agents commands core".
-    # skills = number of first-level sdlc* folders; agents/commands = files;
-    # core = 0/1 on the literal NESTOR.md (A018 SP3). No hard-coded number.
+    # Reads relPaths (one per line) on stdin; prints "skills agents commands".
+    # skills = number of first-level sdlc* folders; agents/commands = files.
+    # No hard-coded number.
     awk -F'/' '
         $0 == "" { next }
-        $0 == "NESTOR.md"         { co++; next }
         $1 == "skills" && NF >= 2 { sk[$2] = 1; next }
         $1 == "agents"            { ag++; next }
         /^commands\/sdlc\//     { cm++; next }
-        END { n = 0; for (k in sk) n++; printf "%d %d %d %d\n", n, ag, cm, co }
+        END { n = 0; for (k in sk) n++; printf "%d %d %d\n", n, ag, cm }
     '
 }
 
@@ -192,20 +189,19 @@ invoke_verify() {
     done < <(printf '%s\n' "${!liveHash[@]}" | LC_ALL=C sort)
 
     # --- Derived floors: committed ref == live ---
-    local rsk rag rcm rco lsk lag lcm lco
-    read -r rsk rag rcm rco < <(printf '%s\n' "${!refHash[@]}"  | get_domain_cardinalities)
-    read -r lsk lag lcm lco < <(printf '%s\n' "${!liveHash[@]}" | get_domain_cardinalities)
+    local rsk rag rcm lsk lag lcm
+    read -r rsk rag rcm < <(printf '%s\n' "${!refHash[@]}"  | get_domain_cardinalities)
+    read -r lsk lag lcm < <(printf '%s\n' "${!liveHash[@]}" | get_domain_cardinalities)
     local -a carddrift=()
     [[ "$lsk" != "$rsk" ]] && carddrift+=("skills: floor=$rsk live=$lsk")
     [[ "$lag" != "$rag" ]] && carddrift+=("agents: floor=$rag live=$lag")
     [[ "$lcm" != "$rcm" ]] && carddrift+=("commands: floor=$rcm live=$lcm")
-    [[ "$lco" != "$rco" ]] && carddrift+=("core: floor=$rco live=$lco")
 
     # --- Report ---
     _vsay ""
     _vsay "  ref (committed HEAD) : ${#refHash[@]} domain files"
     _vsay "  live (sdlc scope)    : ${#liveHash[@]} domain files"
-    _vsay "  derived floors       : skills=$rsk agents=$rag commands=$rcm core=$rco"
+    _vsay "  derived floors       : skills=$rsk agents=$rag commands=$rcm"
 
     local m
     for m in "${missing[@]}";   do _vsay "  [MISSING]      $m"; done

@@ -162,4 +162,3 @@ pwsh -NoProfile -File bundle/scripts/tests/test-install.ps1   # same for the oth
 - `docs/SYNC.md` — capture / restore / verify between `~/.claude` and the repository
 - `claude/skills/sdlc/SKILL.md` — orchestrator skill
 - `claude/skills/sdlc/references/documentation-tiers.md` — documentation tiers
-- Optional interoperability with `nestor-agents`: `docs/INTEROP.md` at the repository root

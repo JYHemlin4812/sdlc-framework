@@ -27,7 +27,7 @@
     Write-FileAtomic       Copy-Tree
     Acquire-SyncLock       Release-SyncLock
     Write-SyncManifest     Read-SyncManifest      Get-FirstRunPlan
-    Set-GenericImport      Set-NestorImport       Remove-NestorImport
+    Set-GenericImport      Set-LocalOverlayImport
 #>
 
 # ---------------------------------------------------------------------------
@@ -110,9 +110,11 @@ function Get-DomainRelPaths {
     param([Parameter(Mandatory)][string]$Root)
     Set-StrictMode -Version Latest
 
-    $resolved = Resolve-Path -LiteralPath $Root -ErrorAction SilentlyContinue
-    if ($null -eq $resolved) { return @() }
-    $root = $resolved.Path
+    # Long form (Get-Item): children are enumerated with long paths, so the root must match them
+    # (Resolve-Path keeps 8.3 short names such as JEAN-Y~1, which broke the relative paths).
+    $item = Get-Item -LiteralPath $Root -ErrorAction SilentlyContinue
+    if ($null -eq $item) { return @() }
+    $root = $item.FullName
 
     $result = New-Object System.Collections.Generic.List[string]
 
@@ -331,6 +333,9 @@ function Write-FileAtomic {
         [AllowNull()][string]$Content
     )
     Set-StrictMode -Version Latest
+
+    # A directory at the destination must fail: Move-Item would move the temp file INTO it (REV-07).
+    if (Test-Path -LiteralPath $Path -PathType Container) { throw "Write-FileAtomic: destination is a directory: $Path" }
 
     $dir = Split-Path -Parent $Path
     if ($dir -and -not (Test-Path -LiteralPath $dir)) {
@@ -663,20 +668,16 @@ function Get-FirstRunPlan {
 }
 
 # ---------------------------------------------------------------------------
-# 13. Set-NestorImport / Remove-NestorImport (P022:A019) — adds/removes the
-#     canonical '@NESTOR.md' line in a GLOBAL USER file (~/.claude/CLAUDE.md),
-#     OUTSIDE the sync domain (never added to Get-DomainRelPaths/greenlist; this
-#     file is unrelated to the sdlc domain mapping). Detection = count of lines
-#     whose TRIMMED content (leading/trailing whitespace removed) is EXACTLY
-#     '@NESTOR.md' (literal match, never a broad regex). Atomic write
-#     (Write-FileAtomic) + timestamped backup (except -DryRun) BEFORE any
-#     mutation; NEVER touches the bytes of other lines.
-#     Set-NestorImport wraps Set-GenericImport (P032:A029), which carries the
-#     same logic parameterized by an explicit $Marker (reusable for any future
-#     marker, e.g. a *.local.md overlay). Optional nestor-agents interop.
+# 13. Set-GenericImport / Set-LocalOverlayImport (P032:A029, P033:A029) — adds a
+#     marker line (e.g. '@CLAUDE.local.md') to a GLOBAL USER file (~/.claude/CLAUDE.md),
+#     OUTSIDE the sync domain (never added to Get-DomainRelPaths/greenlist).
+#     Detection = count of lines whose TRIMMED content is EXACTLY the marker
+#     (literal match, never a broad regex). Atomic write (Write-FileAtomic) +
+#     timestamped backup (except -DryRun) BEFORE any mutation; NEVER touches the
+#     bytes of other lines.
 # ---------------------------------------------------------------------------
 
-function Backup-NestorImportFile {
+function Backup-ImportFile {
     # Timestamped backup (file name UNCHANGED, nested in a unique subfolder)
     # before any mutation of $Path. Mirrors the install.ps1/restore.ps1
     # conventions ($backupRoot/<prefix>-<timestamp>/<original name>) — avoids any
@@ -687,12 +688,12 @@ function Backup-NestorImportFile {
     $dir  = Split-Path -Parent $Path
     $leaf = Split-Path -Leaf $Path
     $ts   = (Get-Date).ToString('yyyyMMdd-HHmmss-fff')
-    $backupDir  = Join-Path (Join-Path $dir '_backups') ("nestor-import-$ts-$PID")
+    $backupDir  = Join-Path (Join-Path $dir '_backups') ("import-$ts-$PID")
     $backupPath = Join-Path $backupDir $leaf
     Write-FileAtomic -Path $backupPath -Bytes ([System.IO.File]::ReadAllBytes($Path)) | Out-Null
 }
 
-function Get-NestorImportLines {
+function Get-ImportLines {
     # Splits $Text into "lines" that KEEP their original terminator (CRLF/LF);
     # the last segment has NO terminator if the text does not end with an EOL.
     # (?<=\n): zero-width split right AFTER each \n (on CRLF, the \r stays
@@ -707,19 +708,9 @@ function Get-NestorImportLines {
     return @($segs)
 }
 
-function Test-NestorImportLine {
-    # $true if $Line (terminator included) is EXACTLY '@NESTOR.md' once its
-    # terminator is removed and leading/trailing whitespace trimmed (literal match).
-    param([Parameter(Mandatory)][AllowEmptyString()][string]$Line)
-    Set-StrictMode -Version Latest
-    $t = $Line.TrimEnd("`n").TrimEnd("`r").Trim()
-    return ($t -eq '@NESTOR.md')
-}
-
 function Set-GenericImport {
-    # Adds the canonical $Marker line to $Path (P032:A029 — body extracted from the
-    # former Set-NestorImport, parameterized by an explicit marker instead of the
-    # '@NESTOR.md' literal).
+    # Adds the canonical $Marker line to $Path (P032:A029 — generic body,
+    # parameterized by an explicit marker).
     #   count($Marker) >= 1 -> no-op (count > 1: Write-Warning, NO dedup).
     #   count == 0 -> append at end of file, WITHOUT touching existing bytes;
     #     prefixed with an EOL (file's DOMINANT style: CRLF if CRLF is the majority,
@@ -739,7 +730,7 @@ function Set-GenericImport {
         $text = [System.Text.Encoding]::UTF8.GetString($bytes)
     }
 
-    $lines = Get-NestorImportLines -Text $text
+    $lines = Get-ImportLines -Text $text
     $count = 0
     foreach ($ln in $lines) {
         $t = $ln.TrimEnd("`n").TrimEnd("`r").Trim()
@@ -773,19 +764,9 @@ function Set-GenericImport {
 
     if ($DryRun) { return }
 
-    if ($exists) { Backup-NestorImportFile -Path $Path }
+    if ($exists) { Backup-ImportFile -Path $Path }
     $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
     Write-FileAtomic -Path $Path -Bytes ($utf8NoBom.GetBytes($newText)) | Out-Null
-}
-
-function Set-NestorImport {
-    # Adds the canonical '@NESTOR.md' line to $Path. Wrapper of Set-GenericImport
-    # (P032:A029) — byte-identical behavior to the original implementation.
-    param(
-        [Parameter(Mandatory)][string]$Path,
-        [switch]$DryRun
-    )
-    Set-GenericImport -Path $Path -Marker '@NESTOR.md' -DryRun:$DryRun
 }
 
 function Set-LocalOverlayImport {
@@ -807,36 +788,4 @@ function Set-LocalOverlayImport {
         Write-FileAtomic -Path $localPath -Content '' | Out-Null
     }
     Set-GenericImport -Path $Path -Marker "@$LocalFileName" -DryRun:$DryRun
-}
-
-
-function Remove-NestorImport {
-    # Removes ALL lines whose trimmed content is EXACTLY '@NESTOR.md', and ONLY
-    # those: the rest of the file stays byte-identical (same other lines, same EOL
-    # style, no trim on kept lines). Missing file -> no-op. -DryRun: 0 writes.
-    param(
-        [Parameter(Mandatory)][string]$Path,
-        [switch]$DryRun
-    )
-    Set-StrictMode -Version Latest
-
-    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return }
-
-    $bytes = [System.IO.File]::ReadAllBytes($Path)
-    $text = [System.Text.Encoding]::UTF8.GetString($bytes)
-    $lines = Get-NestorImportLines -Text $text
-
-    $sb = [System.Text.StringBuilder]::new()
-    $removedAny = $false
-    foreach ($ln in $lines) {
-        if (Test-NestorImportLine -Line $ln) { $removedAny = $true; continue }
-        [void]$sb.Append($ln)
-    }
-
-    if (-not $removedAny) { return }
-    if ($DryRun) { return }
-
-    Backup-NestorImportFile -Path $Path
-    $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
-    Write-FileAtomic -Path $Path -Bytes ($utf8NoBom.GetBytes($sb.ToString())) | Out-Null
 }

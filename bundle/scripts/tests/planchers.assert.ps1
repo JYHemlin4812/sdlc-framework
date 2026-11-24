@@ -31,10 +31,9 @@ $ErrorActionPreference = 'Stop'
 # --- Expected floors (PINNED here, in the test — breaks CI on drift) ---------
 # ponytail: values pinned on purpose in the TEST (not in production); that is the
 # point of the M4 canary. Update them here when the domain changes deliberately.
-$EXPECTED_SKILLS   = 10
-$EXPECTED_AGENTS   = 12   # sdlc-* only (nestor-* agents live in the separate nestor-agents repo)
-$EXPECTED_COMMANDS = 18
-$EXPECTED_CORE     = 0    # literal NESTOR.md (core domain, A018 SP3): not shipped in this repo
+$EXPECTED_SKILLS   = 14
+$EXPECTED_AGENTS   = 12   # sdlc-* only
+$EXPECTED_COMMANDS = 19
 
 # --- Minimal assertions -------------------------------------------------------
 $script:Passed = 0
@@ -80,13 +79,12 @@ if (-not (Test-GitRefUsable -RepoRoot $repoRoot)) {
 $rels = @(Get-RefDomainRelPaths -RepoRoot $repoRoot)
 $card = Get-DomainCardinalities -RelPaths $rels
 
-Write-Host ("  claude/ (git HEAD) : {0} domain files  (skills={1} agents={2} commands={3} core={4})" -f `
-    $rels.Count, $card.Skills, $card.Agents, $card.Commands, $card.Core) -ForegroundColor Gray
+Write-Host ("  claude/ (git HEAD) : {0} domain files  (skills={1} agents={2} commands={3})" -f `
+    $rels.Count, $card.Skills, $card.Agents, $card.Commands) -ForegroundColor Gray
 
 Assert-Eq $EXPECTED_SKILLS   $card.Skills   "skills floor == count(claude/skills/sdlc*)"
 Assert-Eq $EXPECTED_AGENTS   $card.Agents   "agents floor == count(claude/agents/sdlc-*)"
 Assert-Eq $EXPECTED_COMMANDS $card.Commands "commands floor == count(claude/commands/sdlc/*)"
-Assert-Eq $EXPECTED_CORE     $card.Core     "core floor == count(claude/NESTOR.md)"
 
 Write-Host ""
 Write-Host ("=== Summary: {0} PASS / {1} FAIL ===" -f $script:Passed, $script:Failed) -ForegroundColor Cyan
@@ -95,5 +93,5 @@ if ($script:Failed -gt 0) {
     Write-Host "FLOORS DRIFTED: the claude/ domain changed. Revalidate and update the pinned values." -ForegroundColor Red
     exit 1
 }
-Write-Host ("OK: floors match the actual claude/ count ({0}/{1}/{2}/{3})." -f $EXPECTED_SKILLS, $EXPECTED_AGENTS, $EXPECTED_COMMANDS, $EXPECTED_CORE) -ForegroundColor Green
+Write-Host ("OK: floors match the actual claude/ count ({0}/{1}/{2})." -f $EXPECTED_SKILLS, $EXPECTED_AGENTS, $EXPECTED_COMMANDS) -ForegroundColor Green
 exit 0

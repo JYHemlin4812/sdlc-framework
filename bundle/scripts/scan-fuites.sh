@@ -26,7 +26,7 @@
 #   - Candidate public zone (zero tolerance): EVERY path that is NOT explicitly
 #     classified as internal (includes claude/, bundle/, .github/, root files, and
 #     any unlisted folder).
-#   - Internal zone (informational counts ONLY): SDLC_PM/, nestor/.
+#   - Internal zone (informational counts ONLY): SDLC_PM/.
 #
 # History probe (3 revisions, same patterns, no checkout - git grep on a
 # tree-ish):
@@ -105,14 +105,14 @@ get_fuites_level2_patterns() {
     done < "$path"
 }
 
-# --- Fail-safe zoning (A044): internal = SDLC_PM/ or nestor/, otherwise public ---
+# --- Fail-safe zoning (A044): internal = SDLC_PM/, otherwise public ---
 # Canonical definition (documentation/tests). The hot loop of
 # invoke_fuites_tree_scan REPRODUCES this same `case` INLINE (no call to this
 # function through $(...) per file) to avoid a needless fork - see its perf note.
 get_fuites_zone() {
     local rel="$1"
     case "$rel" in
-        SDLC_PM/*|nestor/*) printf 'internal' ;;
+        SDLC_PM/*) printf 'internal' ;;
         *) printf 'public' ;;
     esac
 }
@@ -230,7 +230,7 @@ invoke_fuites_tree_scan() {
         # Inline zoning (no call to get_fuites_zone through $(...) here): avoids
         # one more fork per file in this hot loop.
         case "$rel" in
-            SDLC_PM/*|nestor/*) zone=internal ;;
+            SDLC_PM/*) zone=internal ;;
             *) zone=public ;;
         esac
         if [[ "$zone" == "public" ]]; then

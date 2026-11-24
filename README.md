@@ -10,9 +10,7 @@ from scoping to release with end-to-end traceability (requirements E### → arch
 A### → codable tasks P### → test cases T###), a blocking quality gate (AQ Gate), Code Lock and
 parallel execution in waves.
 
-Standalone. It can optionally work alongside
-[`nestor-agents`](https://github.com/JYHemlin4812/nestor-agents) (see
-[`docs/INTEROP.md`](docs/INTEROP.md)).
+Standalone.
 
 ## Requirements
 

@@ -99,7 +99,7 @@ try {
         'Write-FileAtomic', 'Copy-Tree',
         'Acquire-SyncLock', 'Release-SyncLock',
         'Write-SyncManifest', 'Read-SyncManifest', 'Get-FirstRunPlan',
-        'Set-NestorImport', 'Remove-NestorImport'
+        'Set-GenericImport', 'Set-LocalOverlayImport'
     )
     foreach ($fn in $exported) {
         Assert-True ($null -ne (Get-Command -Name $fn -CommandType Function -ErrorAction SilentlyContinue)) "a. exported function callable: $fn"
@@ -274,28 +274,25 @@ try {
     Assert-True (-not ($skillScope -contains 'autre')) "g. skills scope excludes the third-party skill"
 
     # =======================================================================
-    # (g-sp3) P021:A018 extension — agents/nestor-* pattern + core domain
-    #         NESTOR.md (literal 0/1, no open root pattern) [T070/T071]
+    # (g-sp3) P021:A018 extension — out-of-domain agents and root file
+    #         PERSO.md (no open root pattern) [T070/T071]
     # =======================================================================
-    Write-Host "-- (g-sp3) agents nestor-* domain + NESTOR.md core (A018) --" -ForegroundColor Cyan
+    Write-Host "-- (g-sp3) out-of-domain agents + root file (A018) --" -ForegroundColor Cyan
 
-    # root WITHOUT NESTOR.md: empty core domain (0), no error (T071)
-    Assert-True (-not ($rels -contains 'NESTOR.md')) "g-sp3. root without NESTOR.md => empty core domain (0), no error"
+    # root WITHOUT PERSO.md (T071)
+    Assert-True (-not ($rels -contains 'PERSO.md')) "g-sp3. root without PERSO.md: no error, not in domain"
 
-    New-TextFile -Path (Join-Path $ref 'agents\nestor-qualite.md') -Text 'nq'
-    New-TextFile -Path (Join-Path $ref 'NESTOR.md')                -Text 'core'
+    New-TextFile -Path (Join-Path $ref 'agents\autre-qualite.md') -Text 'nq'
+    New-TextFile -Path (Join-Path $ref 'PERSO.md')                -Text 'perso'
     New-TextFile -Path (Join-Path $ref 'AUTRE.md')                 -Text 'arbitrary root file'
 
     $rels3 = @(Get-DomainRelPaths -Root $ref)
-    Assert-True (-not ($rels3 -contains 'agents/nestor-qualite.md')) "g-sp3. T070: agents/nestor-* OUTSIDE the SDLC domain"
-    Assert-True (-not ($rels3 -contains 'NESTOR.md')) "g-sp3. T071: root NESTOR.md OUTSIDE the SDLC domain"
+    Assert-True (-not ($rels3 -contains 'agents/autre-qualite.md')) "g-sp3. T070: agents/autre-* OUTSIDE the SDLC domain"
+    Assert-True (-not ($rels3 -contains 'PERSO.md')) "g-sp3. T071: root PERSO.md OUTSIDE the SDLC domain"
     Assert-True (-not ($rels3 -contains 'AUTRE.md')) "g-sp3. T071: arbitrary root file (AUTRE.md) OUTSIDE the domain (no open root pattern)"
-    Assert-True (-not ($rels3 -contains 'agents/autre-agent.md')) "g-sp3. agents outside sdlc-*/nestor-* still ignored"
-    # T070: a domain nestor-* agent modified on the ref side only is classified modified-ref
-    Assert-Eq 'modified-ref' (Get-SyncState -RefHash 'r2' -LiveHash 'b' -BaseHash 'b' -RelPath 'agents/nestor-qualite.md').State "g-sp3. T070: agents/nestor-* modified-ref-only classified modified-ref (not ignored)"
-    # T071: the core domain is SUBJECT to exclusions (proof by the code:
-    # no fixed pattern of the exclusion set can match 'NESTOR.md', so the
-    # guard can only be exercised structurally).
+    Assert-True (-not ($rels3 -contains 'agents/autre-agent.md')) "g-sp3. agents outside sdlc-* still ignored"
+    # T070: a modified-ref-only file is classified modified-ref (not ignored)
+    Assert-Eq 'modified-ref' (Get-SyncState -RefHash 'r2' -LiveHash 'b' -BaseHash 'b' -RelPath 'agents/autre-qualite.md').State "g-sp3. T070: modified-ref-only modified-ref-only classified modified-ref (not ignored)"
 
     # =======================================================================
     # (h) Byte-exact hash: stable and sensitive to 1 byte
@@ -367,95 +364,75 @@ try {
     Assert-True (Test-Path -LiteralPath $clog) "bonus. Resolve-LWW logs (append-only)"
 
     # =======================================================================
-    # (k) Set-NestorImport / Remove-NestorImport (P022:A019) — idempotent
-    #     @NESTOR.md import in a file OUTSIDE the sync domain (~/.claude/CLAUDE.md).
+    # (k) Set-GenericImport (P032:A029) — idempotent marker import in a file OUTSIDE the
+    #     sync domain (~/.claude/CLAUDE.md). Marker used here: @keep-me.md (neutral).
     # =======================================================================
-    Write-Host "-- (k) Set-NestorImport / Remove-NestorImport --" -ForegroundColor Cyan
+    Write-Host "-- (k) Set-GenericImport (idempotent marker import) --" -ForegroundColor Cyan
+    $mark = '@keep-me.md'
+    $markRx = '(?m)^\s*@keep-me\.md\s*$'
 
-    # k1. 3x Set (install) + 3x Set (restore) in a row -> count==1 at each step,
-    #     rest of the file byte-identical to the initial state.
-    $nestorDir = Join-Path $work 'nestor-k1'
-    $claudeMd  = Join-Path $nestorDir 'CLAUDE.md'
+    # k1. 6x set in a row -> count==1 at each step, initial content preserved.
+    $k1Dir = Join-Path $work 'generic-k1'
+    $claudeMd  = Join-Path $k1Dir 'CLAUDE.md'
     $initial   = "# User preferences`nALWAYS tell the truth.`n"
     New-TextFile -Path $claudeMd -Text $initial
     for ($i = 1; $i -le 6; $i++) {
-        Set-NestorImport -Path $claudeMd
+        Set-GenericImport -Path $claudeMd -Marker $mark
         $txt = [System.IO.File]::ReadAllText($claudeMd)
-        $cnt = @([regex]::Matches($txt, '(?m)^\s*@NESTOR\.md\s*$')).Count
-        Assert-Eq 1 $cnt "k1. iteration $i : count(@NESTOR.md) == 1"
+        $cnt = @([regex]::Matches($txt, $markRx)).Count
+        Assert-Eq 1 $cnt "k1. iteration $i : count(@keep-me.md) == 1"
         Assert-True ($txt.StartsWith($initial)) "k1. iteration $i : initial content preserved (prefix intact)"
     }
 
     # k2. Line already present in the MIDDLE of the file -> nothing added.
-    $midDir = Join-Path $work 'nestor-k2'
-    $midMd  = Join-Path $midDir 'CLAUDE.md'
-    $midText = "line1`n@NESTOR.md`nline3`n"
+    $midMd  = Join-Path (Join-Path $work 'generic-k2') 'CLAUDE.md'
+    $midText = "line1`n@keep-me.md`nline3`n"
     New-TextFile -Path $midMd -Text $midText
-    Set-NestorImport -Path $midMd
+    Set-GenericImport -Path $midMd -Marker $mark
     $midAfter = [System.IO.File]::ReadAllText($midMd)
     Assert-Eq $midText $midAfter "k2. line in the middle: file unchanged (position-agnostic detection)"
 
-    # k3. Removal (Remove-NestorImport) -> line gone AND no other diff.
-    $rmDir = Join-Path $work 'nestor-k3'
-    $rmMd  = Join-Path $rmDir 'CLAUDE.md'
-    $rmInitial = "before`n@NESTOR.md`nafter`n"
-    New-TextFile -Path $rmMd -Text $rmInitial
-    Remove-NestorImport -Path $rmMd
-    $rmAfter = [System.IO.File]::ReadAllText($rmMd)
-    Assert-Eq "before`nafter`n" $rmAfter "k3. Remove-NestorImport: line removed, rest byte-identical"
-
-    # k4. Missing file -> created with the single '@NESTOR.md' line.
-    $absDir = Join-Path $work 'nestor-k4'
-    $absMd  = Join-Path $absDir 'CLAUDE.md'
+    # k4. Missing file -> created with the single marker line.
+    $absMd  = Join-Path (Join-Path $work 'generic-k4') 'CLAUDE.md'
     Assert-True (-not (Test-Path -LiteralPath $absMd)) "k4. (pre) file missing"
-    Set-NestorImport -Path $absMd
-    Assert-Eq '@NESTOR.md' ([System.IO.File]::ReadAllText($absMd)) "k4. missing file -> created with the single line"
+    Set-GenericImport -Path $absMd -Marker $mark
+    Assert-Eq '@keep-me.md' ([System.IO.File]::ReadAllText($absMd)) "k4. missing file -> created with the single line"
 
-    # k5. File WITHOUT a final newline -> initial content preserved byte for byte,
-    #     correct EOL prefix (LF here, the file's dominant style).
-    $noeolDir = Join-Path $work 'nestor-k5'
-    $noeolMd  = Join-Path $noeolDir 'CLAUDE.md'
-    New-Item -ItemType Directory -Path $noeolDir -Force | Out-Null
+    # k5. File WITHOUT a final newline -> initial bytes preserved, LF prefix.
+    $noeolMd  = Join-Path (Join-Path $work 'generic-k5') 'CLAUDE.md'
+    New-Item -ItemType Directory -Path (Split-Path -Parent $noeolMd) -Force | Out-Null
     [System.IO.File]::WriteAllText($noeolMd, "line-without-eol", (New-Object System.Text.UTF8Encoding($false)))
-    Set-NestorImport -Path $noeolMd
-    Assert-Eq "line-without-eol`n@NESTOR.md" ([System.IO.File]::ReadAllText($noeolMd)) "k5. no final EOL: initial bytes preserved + EOL prefix + marker"
+    Set-GenericImport -Path $noeolMd -Marker $mark
+    Assert-Eq "line-without-eol`n@keep-me.md" ([System.IO.File]::ReadAllText($noeolMd)) "k5. no final EOL: initial bytes preserved + EOL prefix + marker"
 
     # k5b. File WITHOUT a final newline, DOMINANT CRLF -> CRLF prefix (not LF).
-    $noeolCrlfMd = Join-Path (Join-Path $work 'nestor-k5b') 'CLAUDE.md'
+    $noeolCrlfMd = Join-Path (Join-Path $work 'generic-k5b') 'CLAUDE.md'
     New-Item -ItemType Directory -Path (Split-Path -Parent $noeolCrlfMd) -Force | Out-Null
     [System.IO.File]::WriteAllText($noeolCrlfMd, "a`r`nb`r`nc-without-eol", (New-Object System.Text.UTF8Encoding($false)))
-    Set-NestorImport -Path $noeolCrlfMd
-    Assert-Eq "a`r`nb`r`nc-without-eol`r`n@NESTOR.md" ([System.IO.File]::ReadAllText($noeolCrlfMd)) "k5b. no final EOL, CRLF dominant: CRLF prefix"
+    Set-GenericImport -Path $noeolCrlfMd -Marker $mark
+    Assert-Eq "a`r`nb`r`nc-without-eol`r`n@keep-me.md" ([System.IO.File]::ReadAllText($noeolCrlfMd)) "k5b. no final EOL, CRLF dominant: CRLF prefix"
 
-    # k6. --dry-run (DryRun) -> 0 writes (no backup, no target file, no leftover temp).
-    $dryDir = Join-Path $work 'nestor-k6'
-    $dryMd  = Join-Path $dryDir 'CLAUDE.md'
-    Assert-True (-not (Test-Path -LiteralPath $dryMd)) "k6. (pre) file missing"
-    Set-NestorImport -Path $dryMd -DryRun
+    # k6. -DryRun -> 0 writes (no backup, no target file, no leftover temp).
+    $dryMd  = Join-Path (Join-Path $work 'generic-k6') 'CLAUDE.md'
+    Set-GenericImport -Path $dryMd -Marker $mark -DryRun
     Assert-True (-not (Test-Path -LiteralPath $dryMd)) "k6a. dry-run on a missing file: still missing (0 writes)"
-    $dryDir2 = Join-Path $work 'nestor-k6b'
-    $dryMd2  = Join-Path $dryDir2 'CLAUDE.md'
+    $dryMd2  = Join-Path (Join-Path $work 'generic-k6b') 'CLAUDE.md'
     New-TextFile -Path $dryMd2 -Text "existing`n"
     $before6b = [System.IO.File]::ReadAllText($dryMd2)
-    Set-NestorImport -Path $dryMd2 -DryRun
+    Set-GenericImport -Path $dryMd2 -Marker $mark -DryRun
     Assert-Eq $before6b ([System.IO.File]::ReadAllText($dryMd2)) "k6b. dry-run on an existing file: unchanged"
-    Assert-True (-not (Test-Path -LiteralPath (Join-Path $dryDir2 '_backups'))) "k6b. dry-run: no backup created"
-    Assert-Eq 0 (@(Get-ChildItem -LiteralPath $dryDir2 -Filter '*.tmp-*' -Force -ErrorAction SilentlyContinue).Count) "k6b. dry-run: no leftover temp"
 
-    # k7. count > 1 (2 @NESTOR.md lines already present) -> warning, NO dedup.
-    $dupDir = Join-Path $work 'nestor-k7'
-    $dupMd  = Join-Path $dupDir 'CLAUDE.md'
-    $dupText = "@NESTOR.md`nmiddle`n@NESTOR.md`n"
+    # k7. count > 1 (2 marker lines already present) -> warning, NO dedup.
+    $dupMd  = Join-Path (Join-Path $work 'generic-k7') 'CLAUDE.md'
+    $dupText = "@keep-me.md`nmiddle`n@keep-me.md`n"
     New-TextFile -Path $dupMd -Text $dupText
-    $warnOut = (Set-NestorImport -Path $dupMd -WarningAction Continue) 3>&1 | Out-String
-    Assert-True ($warnOut -match 'NESTOR\.md') "k7. warning emitted when count > 1"
+    $warnOut = (Set-GenericImport -Path $dupMd -Marker $mark -WarningAction Continue) 3>&1 | Out-String
+    Assert-True ($warnOut -match 'keep-me\.md') "k7. warning emitted when count > 1"
     Assert-Eq $dupText ([System.IO.File]::ReadAllText($dupMd)) "k7. count > 1: NO automatic dedup (file unchanged)"
 
-    # k8. Remove-NestorImport on a missing file -> no-op (no error).
-    $noneMd = Join-Path (Join-Path $work 'nestor-k8') 'CLAUDE.md'
-    $removeOk = $true
-    try { Remove-NestorImport -Path $noneMd } catch { $removeOk = $false }
-    Assert-True $removeOk "k8. Remove-NestorImport on a missing file: no-op without error"
+    # (k8 removal) is not part of the shipped installer any more: sync-lib never reads or
+    # removes the external import (see test-retrait-*.sh).
+
 
     # =======================================================================
     # (L) P033:A029 — Set-LocalOverlayImport (existence guard for the private
@@ -495,7 +472,7 @@ try {
     Assert-True (-not (Test-Path -LiteralPath $l4Local)) "L4. -DryRun: overlay NOT created"
     Assert-True (-not (Test-Path -LiteralPath $l4Md)) "L4. -DryRun: Path NOT created (0 import line added)"
 
-    # L5. Set-LocalOverlayImport OUTSIDE the sync domain (same status as Set-NestorImport).
+    # L5. Set-LocalOverlayImport OUTSIDE the sync domain (same status as the generic import).
     $l5Dir = Join-Path $work 'overlay-l5'
     New-Item -ItemType Directory -Path $l5Dir -Force | Out-Null
     $domainL5 = @(Get-DomainRelPaths -Root $l5Dir)

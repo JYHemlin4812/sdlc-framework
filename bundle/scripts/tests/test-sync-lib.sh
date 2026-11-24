@@ -87,7 +87,7 @@ exported=(
     write_file_atomic copy_tree
     acquire_sync_lock release_sync_lock
     write_sync_manifest read_sync_manifest get_first_run_plan
-    set_nestor_import remove_nestor_import
+    set_generic_import set_local_overlay_import
 )
 for fn in "${exported[@]}"; do
     at "a. exported function callable: $fn" is_fn "$fn"
@@ -244,27 +244,25 @@ at "g. skills scope includes sdlc-reviewer" contains_line "$scope" 'sdlc-reviewe
 af "g. skills scope excludes the third-party skill" contains_line "$scope" 'autre'
 
 # =======================================================================
-# (g-sp3) P021:A018 extension — agents/nestor-* pattern + core domain
-#         NESTOR.md (literal 0/1, no open root pattern) [T070/T071]
+# (g-sp3) P021:A018 extension — out-of-domain agents and root file
+#         PERSO.md (no open root pattern) [T070/T071]
 # =======================================================================
-printf -- '-- (g-sp3) agents nestor-* domain + NESTOR.md core (A018) --\n'
+printf -- '-- (g-sp3) out-of-domain agents + root file (A018) --\n'
 
-# root WITHOUT NESTOR.md: empty core domain (0), no error (T071)
-af "g-sp3. root without NESTOR.md => empty core domain (0), no error" contains_line "$rels" 'NESTOR.md'
+# root WITHOUT PERSO.md (T071)
+af "g-sp3. root without PERSO.md: no error, not in domain" contains_line "$rels" 'PERSO.md'
 
-new_text "$REF/agents/nestor-qualite.md" 'nq'
-new_text "$REF/NESTOR.md"                'core'
+new_text "$REF/agents/autre-qualite.md" 'nq'
+new_text "$REF/PERSO.md"                'perso'
 new_text "$REF/AUTRE.md"                 'arbitrary root file'
 
 rels3=$(get_domain_relpaths "$REF")
-af "g-sp3. T070: agents/nestor-* OUTSIDE the SDLC domain"        contains_line "$rels3" 'agents/nestor-qualite.md'
-af "g-sp3. T071: root NESTOR.md OUTSIDE the SDLC domain" contains_line "$rels3" 'NESTOR.md'
+af "g-sp3. T070: agents/autre-* OUTSIDE the SDLC domain"        contains_line "$rels3" 'agents/autre-qualite.md'
+af "g-sp3. T071: root PERSO.md OUTSIDE the SDLC domain" contains_line "$rels3" 'PERSO.md'
 af "g-sp3. T071: arbitrary root file (AUTRE.md) OUTSIDE the domain (no open root pattern)" contains_line "$rels3" 'AUTRE.md'
-af "g-sp3. agents outside sdlc-*/nestor-* still ignored" contains_line "$rels3" 'agents/autre-agent.md'
-# T070: a domain nestor-* agent modified on the ref side only is classified modified-ref
-ae "g-sp3. T070: agents/nestor-* modified-ref-only classified modified-ref (not ignored)" 'modified-ref' "$(get_sync_state 'r2' 'b' 'b')"
-# T071: the core domain is SUBJECT to exclusions (proof by the code: no fixed
-# pattern of the exclusion set can match 'NESTOR.md').
+af "g-sp3. agents outside sdlc-* still ignored" contains_line "$rels3" 'agents/autre-agent.md'
+# T070: a modified-ref-only file is classified modified-ref (not ignored)
+ae "g-sp3. T070: modified-ref-only classified modified-ref (not ignored)" 'modified-ref' "$(get_sync_state 'r2' 'b' 'b')"
 
 # =======================================================================
 # (h) Byte-exact hash: stable, sensitive to 1 byte, CRLF!=LF, abc invariant
@@ -336,10 +334,13 @@ ae "bonus. resolve_lww conservative: winner=ref by default (protects the canonic
 at "bonus. resolve_lww logs (append-only)" test -e "$CLOG"
 
 # =======================================================================
-# (k) set_nestor_import / remove_nestor_import (P022:A019) — idempotent
-#     @NESTOR.md import in a file OUTSIDE the sync domain (~/.claude/CLAUDE.md).
+# (k) set_generic_import (P032:A029) — idempotent marker import in a file OUTSIDE the
+#     sync domain (~/.claude/CLAUDE.md). Marker used here: @keep-me.md (neutral).
 # =======================================================================
-printf -- '-- (k) set_nestor_import / remove_nestor_import --\n'
+printf -- '-- (k) set_generic_import (idempotent marker import) --\n'
+
+MARK='@keep-me.md'
+set_marker() { set_generic_import --marker "$MARK" "$@"; }
 
 # read_raw_into VARNAME PATH: assigns the BYTE-EXACT content (trailing EOL included)
 # of PATH to VARNAME via `printf -v` — never via an enclosing $(...), which would
@@ -349,88 +350,76 @@ read_raw_into() {
     __c=$(cat -- "$__p" 2>/dev/null; printf 'X')
     printf -v "$__v" '%s' "${__c%X}"
 }
-count_marker() { grep -c -E '^[[:space:]]*@NESTOR\.md[[:space:]]*$' "$1" 2>/dev/null || true; }
+count_marker() { grep -c -E '^[[:space:]]*@keep-me\.md[[:space:]]*$' "$1" 2>/dev/null || true; }
 
-# k1. 3x set (install) + 3x set (restore) in a row -> count==1 at each step,
-#     rest of the file byte-identical to the initial state.
-K1_MD="$WORK/nestor-k1/CLAUDE.md"
+# k1. 6x set in a row -> count==1 at each step, initial content preserved.
+K1_MD="$WORK/generic-k1/CLAUDE.md"
 INITIAL=$'# User preferences\nALWAYS tell the truth.\n'
 new_text "$K1_MD" "$INITIAL"
 for i in 1 2 3 4 5 6; do
-    set_nestor_import "$K1_MD"
-    ae "k1. iteration $i: count(@NESTOR.md) == 1" 1 "$(count_marker "$K1_MD")"
+    set_marker "$K1_MD"
+    ae "k1. iteration $i: count(@keep-me.md) == 1" 1 "$(count_marker "$K1_MD")"
     read_raw_into txt "$K1_MD"
     prefix="${txt:0:${#INITIAL}}"
     ae "k1. iteration $i: initial content preserved (prefix intact)" "$INITIAL" "$prefix"
 done
 
 # k2. Line already present in the MIDDLE of the file -> nothing added.
-K2_MD="$WORK/nestor-k2/CLAUDE.md"
-MID_TEXT=$'line1\n@NESTOR.md\nline3\n'
+K2_MD="$WORK/generic-k2/CLAUDE.md"
+MID_TEXT=$'line1\n@keep-me.md\nline3\n'
 new_text "$K2_MD" "$MID_TEXT"
-set_nestor_import "$K2_MD"
+set_marker "$K2_MD"
 read_raw_into got2 "$K2_MD"
 ae "k2. line in the middle: file unchanged (position-agnostic detection)" "$MID_TEXT" "$got2"
 
-# k3. Removal (remove_nestor_import) -> line gone AND no other diff.
-K3_MD="$WORK/nestor-k3/CLAUDE.md"
-new_text "$K3_MD" $'before\n@NESTOR.md\nafter\n'
-remove_nestor_import "$K3_MD"
-read_raw_into got3 "$K3_MD"
-ae "k3. remove_nestor_import: line removed, rest byte-identical" $'before\nafter\n' "$got3"
-
-# k4. Missing file -> created with the single '@NESTOR.md' line.
-K4_MD="$WORK/nestor-k4/CLAUDE.md"
+# k4. Missing file -> created with the single marker line.
+K4_MD="$WORK/generic-k4/CLAUDE.md"
 af "k4. (pre) file missing" test -e "$K4_MD"
-set_nestor_import "$K4_MD"
+set_marker "$K4_MD"
 read_raw_into got4 "$K4_MD"
-ae "k4. missing file -> created with the single line" '@NESTOR.md' "$got4"
+ae "k4. missing file -> created with the single line" '@keep-me.md' "$got4"
 
-# k5. File WITHOUT a final newline -> initial content preserved byte for byte,
-#     correct EOL prefix (LF here, the file's dominant style).
-K5_MD="$WORK/nestor-k5/CLAUDE.md"; mkdir -p "$(dirname "$K5_MD")"
+# k5. File WITHOUT a final newline -> initial bytes preserved, LF prefix.
+K5_MD="$WORK/generic-k5/CLAUDE.md"; mkdir -p "$(dirname "$K5_MD")"
 printf '%s' 'line-without-eol' > "$K5_MD"
-set_nestor_import "$K5_MD"
+set_marker "$K5_MD"
 read_raw_into got5 "$K5_MD"
 ae "k5. no final EOL: initial bytes preserved + EOL prefix + marker" \
-   $'line-without-eol\n@NESTOR.md' "$got5"
+   $'line-without-eol\n@keep-me.md' "$got5"
 
 # k5b. File WITHOUT a final newline, DOMINANT CRLF -> CRLF prefix (not LF).
-K5B_MD="$WORK/nestor-k5b/CLAUDE.md"; mkdir -p "$(dirname "$K5B_MD")"
+K5B_MD="$WORK/generic-k5b/CLAUDE.md"; mkdir -p "$(dirname "$K5B_MD")"
 printf 'a\r\nb\r\nc-without-eol' > "$K5B_MD"
-set_nestor_import "$K5B_MD"
+set_marker "$K5B_MD"
 read_raw_into got5b "$K5B_MD"
 ae "k5b. no final EOL, CRLF dominant: CRLF prefix" \
-   $'a\r\nb\r\nc-without-eol\r\n@NESTOR.md' "$got5b"
+   $'a\r\nb\r\nc-without-eol\r\n@keep-me.md' "$got5b"
 
 # k6. --dry-run -> 0 writes (no backup, no target file, no leftover temp).
-K6_MD="$WORK/nestor-k6/CLAUDE.md"
-af "k6. (pre) file missing" test -e "$K6_MD"
-set_nestor_import --dry-run "$K6_MD"
+K6_MD="$WORK/generic-k6/CLAUDE.md"
+set_generic_import --dry-run --marker "$MARK" "$K6_MD"
 af "k6a. dry-run on a missing file: still missing (0 writes)" test -e "$K6_MD"
-
-K6B_MD="$WORK/nestor-k6b/CLAUDE.md"
+K6B_MD="$WORK/generic-k6b/CLAUDE.md"
 new_text "$K6B_MD" $'existing\n'
 read_raw_into BEFORE6B "$K6B_MD"
-set_nestor_import --dry-run "$K6B_MD"
+set_generic_import --dry-run --marker "$MARK" "$K6B_MD"
 read_raw_into AFTER6B "$K6B_MD"
 ae "k6b. dry-run on an existing file: unchanged" "$BEFORE6B" "$AFTER6B"
-af "k6b. dry-run: no backup created" test -d "$WORK/nestor-k6b/_backups"
-TMP_LEFT6=$(find "$WORK/nestor-k6b" -name '*.tmp-*' 2>/dev/null | wc -l | tr -d ' ')
+af "k6b. dry-run: no backup created" test -d "$WORK/generic-k6b/_backups"
+TMP_LEFT6=$(find "$WORK/generic-k6b" -name '*.tmp-*' 2>/dev/null | wc -l | tr -d ' ')
 ae "k6b. dry-run: no leftover temp" 0 "$TMP_LEFT6"
 
-# k7. count > 1 (2 @NESTOR.md lines already present) -> warning, NO dedup.
-K7_MD="$WORK/nestor-k7/CLAUDE.md"
-DUP_TEXT=$'@NESTOR.md\nmiddle\n@NESTOR.md\n'
+# k7. count > 1 (2 marker lines already present) -> warning, NO dedup.
+K7_MD="$WORK/generic-k7/CLAUDE.md"
+DUP_TEXT=$'@keep-me.md\nmiddle\n@keep-me.md\n'
 new_text "$K7_MD" "$DUP_TEXT"
-WARN_OUT=$(set_nestor_import "$K7_MD" 2>&1 1>/dev/null)
+WARN_OUT=$(set_marker "$K7_MD" 2>&1 1>/dev/null)
 at "k7. warning emitted when count > 1" test -n "$WARN_OUT"
 read_raw_into got7 "$K7_MD"
 ae "k7. count > 1: NO automatic dedup (file unchanged)" "$DUP_TEXT" "$got7"
 
-# k8. remove_nestor_import on a missing file -> no-op (no error).
-K8_MD="$WORK/nestor-k8/CLAUDE.md"
-at "k8. remove_nestor_import on a missing file: no-op without error" remove_nestor_import "$K8_MD"
+# k8 (removal) is not part of the shipped installer any more: the external import is
+# never read or removed by sync-lib (see test-retrait-*.sh).
 
 # =======================================================================
 # (L) P033:A029 — set_local_overlay_import (existence guard for the private
@@ -476,7 +465,7 @@ set_local_overlay_import --dry-run "$L4_MD" 'CLAUDE.local.md'
 af "L4. --dry-run: overlay NOT created" test -f "$L4_LOCAL"
 af "L4. --dry-run: path NOT created (0 import line added)" test -f "$L4_MD"
 
-# L5. set_local_overlay_import OUTSIDE the sync domain (same status as set_nestor_import).
+# L5. set_local_overlay_import OUTSIDE the sync domain (same status as the generic import).
 L5_DIR="$WORK/overlay-l5"
 mkdir -p "$L5_DIR"
 DOMAIN_L5=$(get_domain_relpaths "$L5_DIR")

@@ -53,9 +53,6 @@
 .PARAMETER NoBackup
     Skip the backup before replacing files (not recommended).
 
-.PARAMETER RemoveImport
-    Only remove the '@NESTOR.md' import from ClaudeRoot/CLAUDE.md, then exit.
-
 .EXAMPLE
     pwsh ./scripts/install.ps1
     pwsh ./scripts/install.ps1 -DryRun
@@ -69,10 +66,7 @@ param(
     [string]$SourceRoot = (Join-Path $PSScriptRoot "..\..\claude"),
     [switch]$Force,
     [switch]$DryRun,
-    [switch]$NoBackup,
-    # P022:A019: removes the '@NESTOR.md' import from ClaudeRoot/CLAUDE.md INSTEAD of
-    # installing (separate flag, does NOT run the rest of the installation).
-    [switch]$RemoveImport
+    [switch]$NoBackup
 )
 
 # --- Shared foundation (single source A002/A004) ----------------------------
@@ -218,21 +212,9 @@ function Invoke-Install {
         [Parameter(Mandatory)][string]$ClaudeRoot,
         [switch]$Force,
         [switch]$DryRun,
-        [switch]$NoBackup,
-        [switch]$RemoveImport
+        [switch]$NoBackup
     )
     Set-StrictMode -Version Latest
-
-    # --- P022:A019: -RemoveImport is a flag SEPARATE from the normal run —
-    #     it only removes the '@NESTOR.md' import from ClaudeRoot/CLAUDE.md and does
-    #     NOT run the rest of the installation (no SourceRoot/greenlist needed here).
-    if ($RemoveImport) {
-        $rmClaudeRoot = Get-CanonicalPath -Path $ClaudeRoot
-        $rmClaudeMd = Join-Path $rmClaudeRoot 'CLAUDE.md'
-        Remove-NestorImport -Path $rmClaudeMd -DryRun:$DryRun
-        Write-Ok "Import '@NESTOR.md' removed (if present): $rmClaudeMd"
-        return 0
-    }
 
     Write-Header "SDLC v$VERSION — System installer (disaster-recovery bootstrap)"
 
@@ -470,6 +452,9 @@ function Invoke-Install {
 
         # --- Manifest (F6: written ONLY after an ACCEPTABLE post-check, to avoid the
         #     inconsistency run1=exit7 / run2=already-up-to-date; atomic write via sync-lib). ---
+        # Per-file ownership (T6): byte-exact hash of every deployed file, read back from the live tree.
+        $fileHashes = [ordered]@{}
+        foreach ($rel in $deployed) { $fileHashes[$rel] = Get-FileHashByteExact -Path (Join-Path $ClaudeRoot ($rel -replace '/', '\')) }
         $manifest = [ordered]@{
             version            = $VERSION
             installed_at       = (Get-Date).ToString('o')
@@ -480,6 +465,7 @@ function Invoke-Install {
             agents_count       = $agentCount
             files_count        = $deployed.Count
             checksum_sha256    = $globalChecksum
+            file_hashes        = $fileHashes
             installer          = 'install.ps1'
             pwsh_version       = $PSVersionTable.PSVersion.ToString()
         }
@@ -514,6 +500,6 @@ function Invoke-Install {
 if ($MyInvocation.InvocationName -ne '.') {
     [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
     $rc = Invoke-Install -SourceRoot $SourceRoot -ClaudeRoot $ClaudeRoot `
-        -Force:$Force -DryRun:$DryRun -NoBackup:$NoBackup -RemoveImport:$RemoveImport
+        -Force:$Force -DryRun:$DryRun -NoBackup:$NoBackup
     exit $rc
 }

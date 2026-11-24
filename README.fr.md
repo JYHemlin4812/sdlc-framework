@@ -10,9 +10,7 @@ livraison avec une traçabilité de bout en bout (exigences E### → décisions 
 tâches codables P### → cas de test T###), une validation qualité bloquante (AQ Gate), le Code Lock
 et l'exécution parallèle par vagues.
 
-Autonome. Il peut, en option, fonctionner avec
-[`nestor-agents`](https://github.com/JYHemlin4812/nestor-agents) (voir
-[`docs/INTEROP.md`](docs/INTEROP.md)).
+Autonome.
 
 ## Prérequis
 

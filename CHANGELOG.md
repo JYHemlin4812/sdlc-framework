@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Uninstall removes only the bundle files whose hash matches the install manifest (`file_hashes`); a personal or hand-modified file in an SDLC folder is kept and reported. An older install whose manifest has no `file_hashes` keeps the previous behavior, with a warning before removal.
 
 ### Fixed
+- `capture` (Bash and PowerShell) finishes an interrupted capture: when a file was copied to the reference but the commit was rejected, the next run commits it instead of reporting "nothing to capture"; when the commit landed but the sync base was not written, the next run refreshes the base.
 - `planchers.assert.ps1` no longer crashes on the removed `core` counter; pinned floors updated to the current domain (14 skills, 12 agents, 19 commands).
 - AQ Gate (`check_sdlc.py`) now depends on `documentation_tier`. A standard project initialised
   with the untouched templates used to pass (exit 0); unfilled template placeholders are now

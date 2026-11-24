@@ -387,6 +387,43 @@ try {
         Assert-True (-not ([System.IO.Path]::GetFullPath($baks[0].FullName)).StartsWith($repoFullD4, [System.StringComparison]::OrdinalIgnoreCase)) "D4. backup OUTSIDE the git worktree"
     }
 
+    # =======================================================================
+    # (E1) R3-05: commit rejected, then retry -> the pending capture IS committed
+    # =======================================================================
+    Write-Host "-- (E1) commit rejected then retry --" -ForegroundColor Cyan
+    $ke1 = New-Case -Name 'e1' -Files $COMMON
+    Set-SeedBase -Case $ke1
+    $pe1 = @{ RefRoot = $ke1.Ref; LiveRoot = $ke1.Live; GitRoot = $ke1.Repo; ManifestPath = $ke1.Manifest; ConflictLogPath = $ke1.Conflict; LockPath = $ke1.Lock }
+    $hookE1 = Join-Path $ke1.Repo '.git/hooks/pre-commit'
+    New-TextFile -Path $hookE1 -Text "#!/bin/sh`nexit 1`n"
+    New-TextFile -Path (Join-Path $ke1.Live 'commands\sdlc\beta.md') -Text "beta-pending`n"
+    $e1Before = Get-CommitCount $ke1.Repo
+    $re1a = Invoke-CaptureCase -P $pe1
+    Assert-Eq 4 $re1a.Rc "E1. first run: commit rejected -> exit 4"
+    Remove-Item -LiteralPath $hookE1 -Force
+    $re1b = Invoke-CaptureCase -P $pe1
+    Assert-Eq 0 $re1b.Rc "E1. retry: exit 0"
+    Assert-Eq ($e1Before + 1) (Get-CommitCount $ke1.Repo) "E1. retry: one commit created"
+    Assert-Eq "beta-pending" ((Invoke-Git2 -RepoDir $ke1.Repo -GitArgs @('show', 'HEAD:claude/commands/sdlc/beta.md')).Out.Trim()) "E1. HEAD holds the captured bytes"
+    Assert-True ([string]::IsNullOrWhiteSpace((Invoke-Git2 -RepoDir $ke1.Repo -GitArgs @('status', '--porcelain', '--', 'claude/commands/sdlc/beta.md')).Out)) "E1. captured path clean after retry"
+    Assert-Eq (Get-FileHashSafe (Join-Path $ke1.Live 'commands\sdlc\beta.md')) ((Read-SyncManifest -Path $ke1.Manifest).Entries['commands/sdlc/beta.md']) "E1. base holds the captured hash"
+
+    # =======================================================================
+    # (E2) R3-05: commit landed but base not published -> base refreshed, no new commit
+    # =======================================================================
+    Write-Host "-- (E2) committed but base stale --" -ForegroundColor Cyan
+    $ke2 = New-Case -Name 'e2' -Files $COMMON
+    Set-SeedBase -Case $ke2
+    New-TextFile -Path (Join-Path $ke2.Live 'commands\sdlc\beta.md') -Text "beta-landed`n"
+    New-TextFile -Path (Join-Path $ke2.Ref 'commands\sdlc\beta.md') -Text "beta-landed`n"
+    Invoke-Git2 -RepoDir $ke2.Repo -GitArgs @('add', '--', 'claude/commands/sdlc/beta.md') | Out-Null
+    Invoke-Git2 -RepoDir $ke2.Repo -GitArgs @('commit', '-q', '-m', 'simulated capture commit', '--', 'claude/commands/sdlc/beta.md') | Out-Null
+    $e2Before = Get-CommitCount $ke2.Repo
+    $re2 = Invoke-CaptureCase -P @{ RefRoot = $ke2.Ref; LiveRoot = $ke2.Live; GitRoot = $ke2.Repo; ManifestPath = $ke2.Manifest; ConflictLogPath = $ke2.Conflict; LockPath = $ke2.Lock }
+    Assert-Eq 0 $re2.Rc "E2. exit 0"
+    Assert-Eq $e2Before (Get-CommitCount $ke2.Repo) "E2. no new commit"
+    Assert-Eq (Get-FileHashSafe (Join-Path $ke2.Ref 'commands\sdlc\beta.md')) ((Read-SyncManifest -Path $ke2.Manifest).Entries['commands/sdlc/beta.md']) "E2. base refreshed with the committed hash"
+
     # --- Summary -----------------------------------------------------------
     Write-Host ""
     Write-Host ("=== Summary: {0} PASS / {1} FAIL ===" -f $script:Passed, $script:Failed) -ForegroundColor Cyan

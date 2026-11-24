@@ -205,6 +205,10 @@ function Invoke-Capture {
         $captureHash = @{}                                                  # rel -> new sha (== liveHash)
         $lwwPending  = New-Object System.Collections.Generic.List[object]   # modified-both states + -Lww
         $blocks      = New-Object System.Collections.Generic.List[object]   # hard blocks
+        # R3-05: ref == live but base != ref -> an earlier capture copied the file and
+        # did not finish (commit rejected, or base not published). Resolved below.
+        $pending     = @{}                                                  # rel -> ref hash
+        $baseFix     = @{}                                                  # rel -> hash already in HEAD
 
         foreach ($rel in $union) {
             $refH  = Get-CaptureHashOrNull -Root $RefRoot  -Rel $rel
@@ -221,7 +225,7 @@ function Invoke-Capture {
                     if ($Lww) { $lwwPending.Add($st) }
                     else      { $blocks.Add([pscustomobject]@{ Rel = $rel; State = $st.State; RefH = $refH; LiveH = $liveH }) }
                 }
-                'identical'   { }
+                'identical'   { if ($refH -ne $baseH) { $pending[$rel] = $refH } }
                 'modified-ref' { }
                 'added-ref'  { }
                 'deleted-ref' { }
@@ -252,6 +256,20 @@ function Invoke-Capture {
 
         # At this point: no hard block. Writing is allowed.
 
+        # ---- R3-05: finish an interrupted capture ----
+        # Ref path dirty vs HEAD -> copied but never committed: commit it now.
+        # Ref path clean -> already in HEAD (or deployed by restore): refresh the base only.
+        foreach ($rel in @($pending.Keys)) {
+            $pp = Invoke-CaptureGit -GitRoot $GitRoot -GitArgs @('status', '--porcelain', '--', "$refLeaf/$rel")
+            if ($pp.Code -ne 0) { continue }   # git unusable: leave it alone
+            if (-not [string]::IsNullOrWhiteSpace($pp.Out)) {
+                Write-Host ("  [PENDING] {0} (copied earlier, not committed)" -f $rel) -ForegroundColor Yellow
+                if (-not $captureRels.Contains($rel)) { $captureRels.Add($rel) }
+                $captureHash[$rel] = $pending[$rel]
+            }
+            else { $baseFix[$rel] = $pending[$rel] }
+        }
+
         # ---- Opt-in LWW resolution (logged) ----
         # modified-both implies an uncommitted REF change (refH != baseH):
         # winner=live will overwrite it. Remember these rels so they are backed up
@@ -272,6 +290,14 @@ function Invoke-Capture {
         $rels = @($captureRels)
 
         if ($rels.Count -eq 0) {
+            if (($baseFix.Count -gt 0) -and (-not $DryRun)) {
+                $fixed = @{}
+                foreach ($k in $base.Keys) { $fixed[$k] = $base[$k] }
+                foreach ($k in $baseFix.Keys) { $fixed[$k] = $baseFix[$k] }
+                Write-SyncManifest -Path $ManifestPath -Entries $fixed | Out-Null
+                Write-Host ("capture: nothing to capture; base refreshed for {0} already-committed file(s)." -f $baseFix.Count) -ForegroundColor Green
+                return 0
+            }
             Write-Host "capture: nothing to capture (no greenlisted live change)." -ForegroundColor Green
             return 0
         }
@@ -353,6 +379,7 @@ function Invoke-Capture {
         # source vanished before the copy).
         $newBase = @{}
         foreach ($k in $base.Keys) { $newBase[$k] = $base[$k] }
+        foreach ($k in $baseFix.Keys) { $newBase[$k] = $baseFix[$k] }
         foreach ($k in $copied) { if ($captureHash.ContainsKey($k)) { $newBase[$k] = $captureHash[$k] } }
         Write-SyncManifest -Path $ManifestPath -Entries $newBase | Out-Null
 

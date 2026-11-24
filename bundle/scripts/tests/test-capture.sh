@@ -328,6 +328,48 @@ if [[ "$BAK_COUNT" == "1" ]]; then
     case "$(realpath -m "$BAKS")/" in "$(realpath "$C_REPO")"/*) _fail "D4. backup OUTSIDE the git worktree" ;; *) _pass "D4. backup OUTSIDE the git worktree" ;; esac
 fi
 
+# =======================================================================
+# (E1) R3-05: commit rejected, then retry -> the pending capture IS committed
+# =======================================================================
+printf -- '-- (E1) commit rejected then retry: pending capture committed --\n'
+new_case e1
+seed_base "$C_REF" "$C_MANIFEST"
+E1_HOOK="$C_REPO/.git/hooks/pre-commit"
+new_text "$E1_HOOK" $'#!/bin/sh\nexit 1\n'
+chmod +x "$E1_HOOK"
+new_text "$C_LIVE/commands/sdlc/beta.md" $'beta-pending\n'   # modified-live
+E1_BEFORE=$(commit_count "$C_REPO")
+run_capture $(cargs)
+ae "E1. first run: commit rejected -> exit 4"        4 "$CAP_RC"
+rm -f "$E1_HOOK"
+run_capture $(cargs)
+ae "E1. retry: exit 0"                               0 "$CAP_RC"
+ae "E1. retry: one commit created"                   $((E1_BEFORE + 1)) "$(commit_count "$C_REPO")"
+ae "E1. HEAD holds the captured bytes"               "$(printf 'beta-pending\n')" "$(git -C "$C_REPO" show HEAD:claude/commands/sdlc/beta.md)"
+E1_PORC=$(git -C "$C_REPO" status --porcelain -- claude/commands/sdlc/beta.md)
+at "E1. captured path clean after retry"             test -z "${E1_PORC//[$' \t\r\n']/}"
+E1_BASE=$(read_sync_manifest "$C_MANIFEST" | tail -n +2 | awk -F'\t' '$1=="commands/sdlc/beta.md"{print $2}')
+ae "E1. base holds the captured hash" \
+    "$(get_file_hash_byteexact "$C_LIVE/commands/sdlc/beta.md")" "$E1_BASE"
+
+# =======================================================================
+# (E2) R3-05: commit landed but the base was not published -> base refreshed, no new commit
+# =======================================================================
+printf -- '-- (E2) committed but base stale: base refreshed --\n'
+new_case e2
+seed_base "$C_REF" "$C_MANIFEST"
+new_text "$C_LIVE/commands/sdlc/beta.md" $'beta-landed\n'
+new_text "$C_REF/commands/sdlc/beta.md"  $'beta-landed\n'
+git -C "$C_REPO" add -- claude/commands/sdlc/beta.md >/dev/null 2>&1
+git -C "$C_REPO" commit -q -m 'simulated capture commit' -- claude/commands/sdlc/beta.md >/dev/null 2>&1
+E2_BEFORE=$(commit_count "$C_REPO")
+run_capture $(cargs)
+ae "E2. exit 0"                                      0 "$CAP_RC"
+ae "E2. no new commit"                               "$E2_BEFORE" "$(commit_count "$C_REPO")"
+E2_BASE=$(read_sync_manifest "$C_MANIFEST" | tail -n +2 | awk -F'\t' '$1=="commands/sdlc/beta.md"{print $2}')
+ae "E2. base refreshed with the committed hash" \
+    "$(get_file_hash_byteexact "$C_REF/commands/sdlc/beta.md")" "$E2_BASE"
+
 # --- Report -----------------------------------------------------------------
 printf '\n=== Result: %d PASS / %d FAIL ===\n' "$pass" "$fail"
 if [[ $fail -gt 0 ]]; then

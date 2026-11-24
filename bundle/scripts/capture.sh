@@ -161,6 +161,10 @@ invoke_capture() {
     local -A capturehash=()
     local -a lww_rel=() lww_refh=() lww_liveh=()
     local -a blk_rel=() blk_state=() blk_refh=() blk_liveh=()
+    # R3-05: ref == live but base != ref -> an earlier capture copied the file and
+    # did not finish (commit rejected, or base not published). Resolved below.
+    local -a pending_rel=() pending_h=()
+    local -A basefix=()
 
     local rel refh liveh baseh st
     while IFS= read -r rel; do
@@ -179,7 +183,9 @@ invoke_capture() {
                 else
                     blk_rel+=("$rel"); blk_state+=("$st"); blk_refh+=("$refh"); blk_liveh+=("$liveh")
                 fi ;;
-            identical|modified-ref|added-ref|deleted-ref|absent-both)
+            identical)
+                if [[ "$refh" != "$baseh" ]]; then pending_rel+=("$rel"); pending_h+=("$refh"); fi ;;
+            modified-ref|added-ref|deleted-ref|absent-both)
                 : ;;
             *)
                 # deleted-live and every conflict-*: never propagated without a direction.
@@ -202,6 +208,21 @@ invoke_capture() {
     fi
 
     # At this point: no hard block. Writing is allowed.
+
+    # ---- R3-05: finish an interrupted capture ----
+    # Ref path dirty vs HEAD -> copied but never committed: commit it now.
+    # Ref path clean -> already in HEAD (or deployed by restore): refresh the base only.
+    local k porc_p
+    for k in "${!pending_rel[@]}"; do
+        rel="${pending_rel[$k]}"
+        porc_p=$(git -C "$gitroot" status --porcelain -- "$refleaf/$rel" 2>/dev/null) || continue   # git unusable: leave it alone
+        if [[ -n "${porc_p//[$' \t\r\n']/}" ]]; then
+            printf '  [PENDING] %s (copied earlier, not committed)\n' "$rel"
+            capturerels+=("$rel"); capturehash["$rel"]="${pending_h[$k]}"
+        else
+            basefix["$rel"]="${pending_h[$k]}"
+        fi
+    done
 
     # ---- Opt-in LWW resolution (logged) ----
     # modified-both implies an uncommitted REF change: winner=live will
@@ -229,6 +250,15 @@ invoke_capture() {
     done
 
     if [[ ${#capturerels[@]} -eq 0 ]]; then
+        if [[ ${#basefix[@]} -gt 0 && $dryrun -eq 0 ]]; then
+            {
+                local bk0
+                for bk0 in "${!base[@]}"; do printf '%s\t%s\n' "$bk0" "${base[$bk0]}"; done
+                for bk0 in "${!basefix[@]}"; do printf '%s\t%s\n' "$bk0" "${basefix[$bk0]}"; done
+            } | write_sync_manifest --path "$manifest" >/dev/null
+            printf 'capture: nothing to capture; base refreshed for %d already-committed file(s).\n' "${#basefix[@]}"
+            return 0
+        fi
         printf 'capture: nothing to capture (no greenlisted live change).\n'
         return 0
     fi
@@ -308,6 +338,7 @@ invoke_capture() {
     {
         local bk
         for bk in "${!base[@]}"; do printf '%s\t%s\n' "$bk" "${base[$bk]}"; done
+        for bk in "${!basefix[@]}"; do printf '%s\t%s\n' "$bk" "${basefix[$bk]}"; done
         for c in "${copiedarr[@]}"; do
             [[ -n "${capturehash[$c]+x}" ]] && printf '%s\t%s\n' "$c" "${capturehash[$c]}"
         done

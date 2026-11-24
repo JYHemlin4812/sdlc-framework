@@ -59,6 +59,10 @@ invoke_capture() {
 
     # --- Path resolution (Resolve-Path -> realpath) ---
     local r
+    # Existence check BEFORE realpath (as restore.sh): realpath without -e accepts a missing
+    # last component, and capture would then seed a base in live for a non-existent ref.
+    [[ -d "$refroot" ]]  || { printf 'capture: RefRoot not found: %s\n' "$refroot"; return 2; }
+    [[ -d "$liveroot" ]] || { printf 'capture: LiveRoot not found: %s\n' "$liveroot"; return 2; }
     r=$(realpath "$refroot" 2>/dev/null) || { printf 'capture: RefRoot not found: %s\n' "$refroot"; return 2; }
     [[ -n "$r" ]] || { printf 'capture: RefRoot not found: %s\n' "$refroot"; return 2; }
     refroot="$r"

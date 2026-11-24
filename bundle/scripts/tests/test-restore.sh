@@ -224,7 +224,7 @@ run_restore --ref-root "$CASE_REF" --live-root "$CASE_LIVE" --git-root "$CASE_RE
 # by survival.
 assert_present "$CASE_LIVE/agents/sdlc-extra.md" "C5. added-live NOT deleted (protected H6)"
 assert_eq "live-only" "$(cat "$CASE_LIVE/agents/sdlc-extra.md")" "C5. live-only content intact"
-assert_ne 0 "$RC" "C5. exit != 0 (extra reported by the post-check, not a deletion)"
+assert_eq 7 "$RC" "C5. exit 7 (extra reported by the post-check, not a deletion)"
 
 # =======================================================================
 # (C6) --dry-run: 0 writes (live/backup), would-restore reflected

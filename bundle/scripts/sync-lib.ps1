@@ -479,6 +479,13 @@ function Acquire-SyncLock {
     catch [System.IO.IOException] {
         throw "Sync lock already held by another process: $Path"
     }
+    catch {
+        # A DIRECTORY at the lock path (the Bash form, mkdir) gives "access denied", not an
+        # IOException. Without this branch the .NET error was statement-terminating only and
+        # the caller went on WITHOUT the lock. Any other failure must stop the caller too.
+        if (Test-Path -LiteralPath $Path) { throw "Sync lock already held by another process: $Path" }
+        throw "Cannot create the sync lock $($Path): $($_.Exception.Message)"
+    }
 
     try {
         $meta = "pid=$PID`nhost=$([System.Environment]::MachineName)`nat=$((Get-Date).ToString('o'))"

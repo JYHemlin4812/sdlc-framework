@@ -26,7 +26,7 @@ installer/
     ownership.py       preuve d'appartenance au bundle (§3)
     paths.py           résolution physique (realpath, jonctions, liens) ; confinement (§5)
     locks.py           un seul verrou O_EXCL partagé `<live>/.sync.lock` (pid, délai), comme les scripts actuels ; pris AVANT les contrôles qui décident (R3-09) ; non réentrant ; aucun verrou en dry-run
-    fsops.py           safe_replace : refus si la destination est un répertoire ; temporaire privé (0700, ACL sous Windows) ; fsync ; os.replace
+    fsops.py           safe_replace : refus si la destination est un répertoire ; temporaire dans le dossier de destination (droits : voir §5.2 point 5) ; fsync ; os.replace
     backup.py          sauvegarde horodatée unique (mkdtemp), chemins relatifs conservés ; toute erreur arrête avant suppression
     manifests.py       deux registres, deux schémas (§4)
     overlay.py         import CLAUDE.local.md seulement ; octets préservés ; UTF-8 sinon refus avant mutation
@@ -89,6 +89,7 @@ Effets par commande :
 2. Chaque chemin relatif est validé (pas absolu, pas de segment `.`/`..`/vide), puis sa chaîne de parents physiques est vérifiée sous la racine prévue.
 3. Liens symboliques et points de réanalyse (jonctions) : refusés (code 3) s'ils apparaissent dans la chaîne des parents ou comme fichier, côté source comme côté destination. La racine live elle-même peut être un lien (résolue une fois au départ).
 4. Tous les contrôles de 5.2 se font sur l'ensemble des chemins **avant** la première mutation : un refus ne laisse rien de modifié.
+5. Modèle de menace (décision JYH du 2026-11-24, constats E1-01 et E1-03) : aucun autre programme n'écrit dans la racine live ni dans la source pendant une opération ; le verrou partagé coordonne seulement les installeurs. Hors périmètre, comme dans les scripts actuels (`restore.ps1`, note « outside the threat model ») : un dossier remplacé par un lien entre le contrôle et l'écriture (pas d'opérations relatives à un descripteur) ; les droits du fichier temporaire, créé dans le dossier de destination, qui hérite sous Windows des droits de ce dossier. À revoir si l'installeur doit un jour tourner sur une machine partagée.
 
 Tests : live dans `repo/live` ; `--manifest-path` dans le worktree ; installation depuis une archive hors Git ; `--source repo/claude` explicite accepté ; scan-fuites par défaut accepté ; jonction `commands/sdlc` vers un dossier sentinelle externe → code 3, sentinelle intacte ; nom de skill `../x` dans un registre → code 3. Le test C3 existant (`test-capture.sh`, état hors worktree) reste.
 
@@ -213,7 +214,7 @@ Chaque étape : tests verts, revue Codex de l'étape, commit après approbation 
 
 1. E1 : domain, inventory, paths, fsops, locks, backup ; test de parité des codes `.sh`/`.ps1`.
 2. E2 : manifests, ownership (historique Git, fixtures des deux anciens formats), overlay.
-3. E3 : install + verify, parité.
+3. E3 : install + verify, parité ; inclut le test exact du code 7 d'install sur une référence propre, registre non publié (constat E1-R5-04 reporté ici).
 4. E4 : uninstall, parité.
 5. E5 : capture + restore, parité, séquence A → B → C.
 6. E6 : scan-fuites porté ; documentation alignée (§14).

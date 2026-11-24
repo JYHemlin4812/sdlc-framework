@@ -329,6 +329,16 @@ if [[ "$BAK_COUNT" == "1" ]]; then
 fi
 
 # =======================================================================
+# (E0) missing RefRoot -> exit 2, nothing written in live (parity with capture.ps1)
+# =======================================================================
+printf -- '-- (E0) missing RefRoot --\n'
+new_case e0
+E0_LIVE_BEFORE=$(find "$C_LIVE" -type f | sort | md5sum)
+run_capture --ref-root "$C_REPO/missing" --live-root "$C_LIVE"
+ae "E0. missing RefRoot: exit 2"                     2 "$CAP_RC"
+ae "E0. live unchanged (no base seeded)"             "$E0_LIVE_BEFORE" "$(find "$C_LIVE" -type f | sort | md5sum)"
+
+# =======================================================================
 # (E1) R3-05: commit rejected, then retry -> the pending capture IS committed
 # =======================================================================
 printf -- '-- (E1) commit rejected then retry: pending capture committed --\n'

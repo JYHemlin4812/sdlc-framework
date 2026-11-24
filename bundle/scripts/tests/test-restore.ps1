@@ -249,7 +249,7 @@ try {
     # an uncaptured addition", NOT a deletion. Protection is proven by survival.
     Assert-True (Test-Path -LiteralPath (Join-Path $k5.Live 'agents\sdlc-extra.md')) "C5. added-live NOT deleted (protected H6)"
     Assert-Eq "live-only`n" (Read-Text (Join-Path $k5.Live 'agents\sdlc-extra.md')) "C5. live-only content intact"
-    Assert-True ($r5.Rc -ne 0) "C5. exit != 0 (extra reported by the post-check, not a deletion)"
+    Assert-Eq 7 $r5.Rc "C5. exit 7 (extra reported by the post-check, not a deletion)"
 
     # =======================================================================
     # (C6) --dry-run: 0 writes (live/backup), would-restore reflected

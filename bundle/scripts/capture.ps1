@@ -123,6 +123,15 @@ function Invoke-Capture {
     Set-StrictMode -Version Latest
 
     # --- Path resolution ---
+    # Both roots must be DIRECTORIES (Resolve-Path also accepts a file); parity with capture.sh.
+    if (-not (Test-Path -LiteralPath $RefRoot -PathType Container)) {
+        Write-Host "capture: RefRoot not found: $RefRoot" -ForegroundColor Red
+        return 2
+    }
+    if (-not (Test-Path -LiteralPath $LiveRoot -PathType Container)) {
+        Write-Host "capture: LiveRoot not found: $LiveRoot" -ForegroundColor Red
+        return 2
+    }
     $refResolved = Resolve-Path -LiteralPath $RefRoot -ErrorAction SilentlyContinue
     if ($null -eq $refResolved) {
         Write-Host "capture: RefRoot not found: $RefRoot" -ForegroundColor Red

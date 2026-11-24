@@ -200,7 +200,10 @@ get_file_hash_byteexact() {
     # normalization). 1st field, lowercase (sha256sum already outputs lowercase).
     local path="$1"
     local out
-    out=$(sha256sum "$path") || return 1
+    # Read from stdin: with a file NAME, GNU sha256sum prefixes the line with '\' when it escapes
+    # the name (e.g. a Windows path with backslashes), and that prefix ended up in the digest.
+    [[ -f "$path" ]] || return 1
+    out=$(sha256sum < "$path") || return 1
     printf '%s' "${out%% *}"
 }
 

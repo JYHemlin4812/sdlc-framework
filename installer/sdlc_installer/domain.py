@@ -97,7 +97,7 @@ def _h3_dir(rel):
     return len(parts) == 3 and parts[0] == 'skills' and parts[1] == 'sdlc' and parts[2].lower() == 'commands'
 
 
-def _scan(root, rel_dir, found):
+def _scan(root, rel_dir, found, skip=None):
     """Recursive scan of <root>/<rel_dir>: refuses links/junctions that may hold domain files,
     propagates errors, accepts regular files only, prunes excluded and H3 subtrees before descent."""
     full = os.path.join(root, *rel_dir.split('/'))
@@ -114,9 +114,9 @@ def _scan(root, rel_dir, found):
                 raise SecurityError('link or junction refused in the SDLC domain: %s' % rel)
             continue
         if stat.S_ISDIR(st.st_mode):
-            if entry.name.lower() in _DIRS_L or _h3_dir(rel):
+            if entry.name.lower() in _DIRS_L or _h3_dir(rel) or rel == skip:
                 continue
-            _scan(root, rel, found)
+            _scan(root, rel, found, skip)
         elif stat.S_ISREG(st.st_mode):
             if in_domain(rel):
                 found.add(rel)
@@ -134,11 +134,14 @@ def _lstat_or_none(path):
         raise
 
 
-def domain_rels(root, allow_root_link=False):
+def domain_rels(root, allow_root_link=False, tops=('skills', 'commands', 'agents'), skills=None, skip=None):
     """Sorted domain relative paths on disk under `root` (E1-02, E1-R2-01).
     Every domain ancestor (skills, commands, commands/sdlc, agents, skills/sdlc*) is inspected without
     following links: a link or junction there is refused (SecurityError), never treated as absent.
-    An unreadable directory raises instead of looking empty."""
+    An unreadable directory raises instead of looking empty.
+    `tops` and `skills` restrict the scan to some domain roots (uninstall, E4-R2-04): a root that is not
+    selected is not opened at all, so a link there neither blocks nor is followed. `skip`: one relative folder that
+    is never opened (uninstall: a directory standing at the registry path, E4-R3-03)."""
     # E1-R5-01: the root itself must not be a link or junction (a source root); the live root may be
     # one by design (§5.2 point 3), and its callers pass allow_root_link=True.
     rst = _lstat_or_none(root)
@@ -154,7 +157,7 @@ def domain_rels(root, allow_root_link=False):
     # a hard-coded name that a case-insensitive filesystem would also resolve for SDLC/Skills.
     top_names = set(os.listdir(root))
     for top in ('skills', 'commands', 'agents'):
-        if top not in top_names:
+        if top not in top_names or top not in tops or top == skip:
             continue
         st = _lstat_or_none(os.path.join(root, top))
         if st is None:
@@ -167,7 +170,7 @@ def domain_rels(root, allow_root_link=False):
             with os.scandir(os.path.join(root, 'skills')) as it:
                 skill_entries = sorted(it, key=lambda e: e.name)
             for entry in skill_entries:
-                if not entry.name.startswith('sdlc'):
+                if not entry.name.startswith('sdlc') or (skills is not None and entry.name not in skills):
                     continue
                 est = entry.stat(follow_symlinks=False)
                 if _is_link(est):
@@ -187,5 +190,7 @@ def domain_rels(root, allow_root_link=False):
         else:
             to_scan.append('agents')
     for rel_dir in to_scan:
-        _scan(root, rel_dir, found)
+        if rel_dir == skip:
+            continue                    # E4-R4-03: a skipped folder is never opened, a selected root included
+        _scan(root, rel_dir, found, skip)
     return sorted(found)

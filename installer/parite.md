@@ -38,3 +38,27 @@ Une ligne par assertion des suites `bundle/scripts/tests`. Mise à jour à chaqu
 | T7 | skill/agent tiers ignorés | `test_t7_third_party_ignored` | — |
 | T8, T9e | projection du domaine (fichier libre, casse) | `test_t8_t9e_domain_projection` | — |
 | — | indisponible → 2 | `test_unavailable_gives_2` | — |
+
+## uninstall (`test-uninstall.sh`, `test-uninstall.ps1`, cas uninstall des trois `test-retrait-*`) → `installer/tests/test_uninstall.py`
+
+Écarts voulus communs :
+
+- Sauvegarde : seuls les fichiers supprimés (et le registre) sont sauvegardés ; les scripts copiaient les dossiers entiers, fichiers conservés compris. Un fichier conservé reste en place, il n'a donc pas besoin de sauvegarde.
+- `--discover` sans registre : skills dérivés du disque (dossiers `skills/sdlc*` dont le `name:` commence par `sdlc`, §4) ; les scripts utilisaient une liste fixe de quatre skills.
+- JSON invalide (§8.6.1.b, R3-07) : code 2 sans `--discover` ; `uninstall.sh` extrayait des champs par `grep` et continuait. Cas de migration : relancer avec `--discover`.
+- Fichiers exclus de la synchro (`*.bak`, `__pycache__`…) dans un dossier ciblé : conservés comme par les scripts, mais signalés au niveau du dossier (« kept (not empty) ») et non fichier par fichier.
+- Les registres des fixtures des fixtures sont écrits par un vrai installeur (Python, ou `install.sh` de `667d7ed`). Les registres écrits à la main des scripts (sans `checksum_sha256`) sont corrompus pour Python (décision E2), donc code 2 sans `--discover` (`test_hand_written_registry_without_aggregate_is_corrupt`).
+
+| Scénario | Assertion des scripts | Test Python | Écart voulu |
+|---|---|---|---|
+| U0 | invariants du texte des scripts | — | sans objet |
+| U1 | défaut : skills et commands retirés ; agents, PERSO.md, CLAUDE.md intacts ; sauvegarde sans agents | `test_u1_default_keeps_agents_and_core` | sauvegarde sous `<live>/_backups/uninstall-*` au lieu de `skills/_backups/sdlc-uninstall-*`, comme install |
+| U2 | `--remove-core` : agents sdlc-* (imbriqués compris) retirés et sauvegardés ; le reste intact | `test_u2_remove_core` | idem |
+| U3 | `--remove-core` sans agents : 0 | `test_u3_remove_core_without_agents` | — |
+| U4 | confirmation refusée : 0, live intact | `test_u4_confirmation_refused` | fin d'entrée (EOF) = refus |
+| retrait T4, T5, T9 | `--discover --remove-core` : agents sdlc-* retirés (imbriqués compris), autres agents, NESTOR.md et CLAUDE.md intacts | `test_retrait_t4_t5_t9_remove_core_with_discover` | — |
+| retrait T6, T6b | fichier personnel et fichier modifié conservés | `test_retrait_t6_personal_and_modified_files_kept` | — |
+| retrait T8 | sans registre ni `--discover` : refus, rien supprimé | `test_retrait_t8_no_registry_no_discover` | — |
+| retrait T10 | homonymes `skills/sdlc/dev.md` et `commands/sdlc/dev.md` tous deux sauvegardés | `test_retrait_t10_homonyms_both_backed_up` | sous `--discover`, seuls les fichiers prouvés par l'historique Git sont supprimés (§8.6.1.b) ; sans historique lisible, rien n'est supprimé |
+| retrait T9, T12, T10, T13 | registre sans `file_hashes` : avertissement ; avec : aucun | `test_retrait_t9_t12_legacy_registry`, `test_registry_file_hashes_without_history` | avec l'historique Git lisible (`--ref`), l'appartenance est prouvée et une modification manuelle est conservée (§3) |
+| retrait T1-T3, T7, T8 (verify), T11 | invariants du texte, `--remove-import`, écriture atomique, dry-run install | `test_install` (C14, C7), `test_fsops` | T1/T2 : sans objet (texte des scripts) |

@@ -2,8 +2,22 @@
 import os
 import stat
 import tempfile
+import time
 
 from .errors import InstallerError
+
+
+def _replace(src, dst, attempts=6, delay=0.05):
+    """os.replace, retried on Windows when the target is briefly held by an indexer or antivirus
+    (PermissionError, observed once in 80+ runs). Any other error, or the last failure, propagates."""
+    for attempt in range(attempts):
+        try:
+            os.replace(src, dst)
+            return
+        except PermissionError:
+            if os.name != 'nt' or attempt == attempts - 1:
+                raise
+            time.sleep(delay * (attempt + 1))
 
 
 def safe_replace(path, data):
@@ -27,7 +41,7 @@ def safe_replace(path, data):
             os.fsync(fh.fileno())
         if old_mode is not None:
             os.chmod(tmp, old_mode)
-        os.replace(tmp, path)
+        _replace(tmp, path)
     except BaseException:
         try:
             os.unlink(tmp)

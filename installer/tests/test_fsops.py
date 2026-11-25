@@ -25,6 +25,30 @@ class SafeReplace(TempDirCase):
         fsops.safe_replace(p, b'new')
         self.assertEqual(fsops.read_bytes(p), b'new')
 
+    def test_transient_permission_error_is_retried_on_windows_only(self):
+        """A brief Windows lock (indexer, antivirus) must not fail an install; elsewhere the error is immediate."""
+        from unittest import mock
+        real = os.replace
+        calls = []
+
+        def flaky(src, dst):
+            calls.append(1)
+            if len(calls) < 3:
+                raise PermissionError(13, 'locked')
+            return real(src, dst)
+
+        p = os.path.join(self.tmp, 'x.md')
+        with mock.patch.object(fsops.os, 'replace', flaky), mock.patch.object(fsops.time, 'sleep', lambda s: None):
+            if os.name == 'nt':
+                fsops.safe_replace(p, b'ok')
+                self.assertEqual(fsops.read_bytes(p), b'ok')
+                self.assertEqual(len(calls), 3)
+            else:
+                with self.assertRaises(PermissionError):
+                    fsops.safe_replace(p, b'ok')
+                self.assertEqual(len(calls), 1)
+        self.assertEqual([n for n in os.listdir(self.tmp) if n.startswith('.sdlc-tmp-')], [])
+
     def test_directory_refused(self):
         d = os.path.join(self.tmp, 'dir')
         os.makedirs(d)

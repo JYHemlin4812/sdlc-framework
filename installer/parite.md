@@ -62,3 +62,73 @@ Une ligne par assertion des suites `bundle/scripts/tests`. Mise à jour à chaqu
 | retrait T10 | homonymes `skills/sdlc/dev.md` et `commands/sdlc/dev.md` tous deux sauvegardés | `test_retrait_t10_homonyms_both_backed_up` | sous `--discover`, seuls les fichiers prouvés par l'historique Git sont supprimés (§8.6.1.b) ; sans historique lisible, rien n'est supprimé |
 | retrait T9, T12, T10, T13 | registre sans `file_hashes` : avertissement ; avec : aucun | `test_retrait_t9_t12_legacy_registry`, `test_registry_file_hashes_without_history` | avec l'historique Git lisible (`--ref`), l'appartenance est prouvée et une modification manuelle est conservée (§3) |
 | retrait T1-T3, T7, T8 (verify), T11 | invariants du texte, `--remove-import`, écriture atomique, dry-run install | `test_install` (C14, C7), `test_fsops` | T1/T2 : sans objet (texte des scripts) |
+
+## capture (`test-capture.sh`, `test-capture.ps1`) → `installer/tests/test_capture.py`
+
+Écarts voulus communs à capture et restore :
+
+- Pas de verrou ni d'écriture en dry-run (design §2) ; les scripts prenaient le verrou même en dry-run.
+- Verrou toujours `<live>/.sync.lock` (§2) : pas d'option `--lock`. `--manifest-path` et `--conflict-log` restent réglables, mais refusés (2) dans le worktree de la référence (§5.1).
+- `--ref` désigne la racine du dépôt (comme verify), pas le dossier `claude/` ; un sous-dossier est refusé (2).
+- Chaque fichier est lu une fois : les octets classés sont ceux copiés et enregistrés dans la base (les scripts relisaient au moment de la copie).
+- Git est appelé avec `--literal-pathspecs` : un `[` dans un nom n'est jamais un motif.
+- `--allow-dirty` refusé (2), §7.
+- Une clé de base qui n'est pas un chemin relatif sûr rend la base non fiable (6).
+- Fichiers d'état (base, `conflicts.log`) : `..` refusé dans l'argument brut, aucun lien ni jonction sur le chemin (3) ; base et journal distincts, jamais un fichier géré du live (domaine, registre, verrou, racine `_backups`) (2) ; journal avec d'autres liens physiques refusé (3) (E5-R1-02, E5-R1-03, E5-R2-03, E5-R2-04).
+- L'inventaire complet de HEAD (liens du domaine refusés) est lu avant toute écriture, premier lancement compris (E5-R2-08, E5-R3-04) ; le post-contrôle vérifie aussi dans le HEAD final les chemins repris d'une capture interrompue (E5-R3-03) : un lien encore commité dans le domaine refuse la capture (3) tant que sa suppression n'est pas commitée.
+- Capture interrompue dont le chemin a été modifié dans l'index ou l'arbre depuis : bloquée (3), rien écrit, index conservé (E5-R2-05). `git status` lu avec `--no-renames` (E5-R2-06).
+- Capture interrompue (R3-05) : la base n'est publiée que si le blob de HEAD égale les octets capturés ; sinon le chemin reste à commiter (un ajout ignoré par Git donne 4 à chaque relance, jamais un faux succès) (E5-R1-04). Les scripts se fiaient à `git status`.
+- Post-contrôle de capture : HEAD contient exactement les octets capturés et ces chemins sont propres ; sinon 7.
+- Pathspecs transmis à `git add` et `git commit` par l'entrée standard (`--pathspec-from-file`, Git 2.26 ou plus) : pas de limite de ligne de commande (E5-R1-08).
+
+| Scénario | Assertion des scripts | Test Python | Écart voulu |
+|---|---|---|---|
+| C1 | modified-both sans `--lww` → 3, diff affiché, rien écrit, pas de `conflicts.log` | `Parity.test_c1_modified_both_blocks` | diff unifié Python (`difflib`, 200 lignes au plus) au lieu de `git diff --no-index` |
+| C2 | texte : `git add`/`commit` avec pathspec, jamais `-A` | — | sans objet (texte des scripts) ; couvert par C2b |
+| C2b | commit limité : S1 hors domaine, skill tiers, S2 indexé hors `claude/`, S3 deleted-ref ignoré | `Parity.test_c2b_commit_scope` | Python vérifie en plus que README.md reste indexé (§7) |
+| C3, D3 | base et `conflicts.log` hors worktree, écriture atomique, ref == live, base réécrite | `Parity.test_c3_d3_state_outside_worktree_and_success` | — |
+| C4 | post-commit salit le chemin commité → 7, base intacte | `Parity.test_c4_post_check_failure` | — |
+| C5a | added-live capturé et commité, base mise à jour | `Parity.test_c5a_added_live_captured` | — |
+| C5b | deleted-live → 3, ref intacte, pas de commit | `Parity.test_c5b_deleted_live_blocked` | — |
+| C6a | dry-run : 0 commit, 0 fichier, base intacte | `Parity.test_c6a_dry_run_writes_nothing` | pas de verrou (voir plus haut) |
+| C6b | dry-run reflète le blocage ; pas de `conflicts.log` | `Parity.test_c6b_dry_run_reflects_block` | — |
+| D1 | premier lancement : seed, blocage (5), `--adopt` | `Parity.test_d1_first_run_seed_block_adopt` | — |
+| D2 | base corrompue → FAIL CLOSED, pas de commit | `Parity.test_d2_corrupt_base_fails_closed` | code exact 6 vérifié |
+| D4 | `--lww --provenance live` : journalisé, live gagne, commit, référence perdante sauvegardée hors worktree | `Parity.test_d4_lww_live_winner_logged_and_backed_up` | sauvegarde sous `<live>/_backups/capture-lww-*` au lieu de `<dossier de conflicts.log>/_backups` |
+| E1, E2 | R3-05 : commit refusé puis relancé ; commit fait mais base non publiée | `Parity.test_e1_*`, `Parity.test_e2_*` | — |
+| R3-08 | `--lww` par défaut : la référence reste intacte, rien capturé | `Contract.test_r3_08_default_lww_keeps_the_reference` | — |
+| §7 | LWW avec modification locale de la référence et fichier non suivi sans rapport | `Contract.test_lww_with_a_local_reference_change_and_unrelated_dirt` | — |
+| PYI-01 | capture puis install depuis le commit produit | `Contract.test_pyi_01_capture_then_install_from_the_commit` | — |
+| PYI-04 | base, `conflicts.log` ou live dans le worktree → 2, rien créé | `Contract.test_pyi_04_state_inside_worktree_refused` | — |
+| §5.2.4 | un dossier là où va un fichier capturé → 3 avant `conflicts.log`, sauvegarde et copie, dry-run compris | `Contract.test_refusal_before_any_write_dry_run_included` | les scripts sautaient le chemin (Copy-Tree) |
+| — | `a[1].md` capturé, voisin sale `a1.md` non commité | `Contract.test_literal_pathspecs` | — |
+
+## restore (`test-restore.sh`, `test-restore.ps1`) → `installer/tests/test_restore.py`
+
+Écarts voulus (en plus des écarts communs ci-dessus) :
+
+- Les octets déployés sont les blobs de HEAD (`git cat-file`), pas l'arbre de travail (décision E3, §3) ; un fichier ignoré par Git dans `claude/` n'est jamais déployé. Pas de dossier de staging : les octets sont en mémoire.
+- Sauvegardes sous `<live>/_backups/restore-*` (comme install et uninstall) ; pas d'option `--backup-root`.
+- Post-contrôle par `verify` en processus, pas en sous-processus ; même règle : toute différence (EXTRA compris) ou verify indisponible → 7.
+- Après un post-contrôle propre : trace de déploiement dans le registre d'installation s'il existe (§4, R3-06) ; les scripts n'écrivaient rien. La trace est validée avant la première mutation, dry-run compris ; une ancienne clé qui ne diffère d'une nouvelle que par la casse est remplacée (E5-R1-05, E5-R1-07).
+- Fast-forward (E5-R1-01) : le plan est fait contre le commit amont, puis l'avance rapide n'est appliquée qu'après tous les refus ; un blocage laisse HEAD, l'index et la référence intacts. Les scripts avançaient la branche avant de classer. Ordre : référence sale (5) avant divergence (4) ; le dry-run lit le commit amont sans avancer la branche et renvoie 4 en cas de divergence (les scripts l'ignoraient en dry-run). Une branche locale en avance sur son amont n'est pas une divergence : rien à appliquer (E5-R2-02). Avant l'avance rapide (dry-run compris), restore refuse (5) si elle écraserait quelque chose dans le dépôt : un fichier non suivi ou ignoré là où l'amont ajoute un chemin, un fichier là où il faut un dossier, ou un fichier suivi modifié localement ; un dossier ignoré qui peut coexister ne bloque pas. Le merge passe aussi `--no-overwrite-ignore` (E5-R2-01, E5-R3-01, E5-R3-02 ; `git read-tree -n` ne voit pas les fichiers ignorés, mesuré avec Git 2.54).
+- Trace : les deux tables finales (`file_hashes`, `retained_hashes`) sont validées ensemble ; une ancienne clé dont le fichier ou un dossier parent ne diffère que par la casse est remplacée (E5-R2-07).
+
+| Scénario | Assertion des scripts | Test Python | Écart voulu |
+|---|---|---|---|
+| C0 | texte : pas de robocopy, Copy-Tree, post-contrôle verify | — | sans objet (texte des scripts) |
+| C1, C7 | modified-ref et added-ref déployés, sauvegarde de l'ancien live, aucun temporaire restant | `Parity.test_c1_c7_nominal_restore` | — |
+| C2 | deleted-ref : supprimé du live, sauvegardé | `Parity.test_c2_base_aware_deletion` | — |
+| C3 | modified-live → 3 sans `--force-restore`, déployé et sauvegardé avec | `Parity.test_c3_modified_live_blocked_then_forced` | — |
+| C4 | modified-both → 3 même avec `--force-restore` | `Parity.test_c4_modified_both_blocked_even_forced` | — |
+| C5 | added-live protégé ; post-contrôle → 7 | `Parity.test_c5_added_live_protected` | — |
+| C6 | dry-run : live et sauvegardes intacts, liste affichée | `Parity.test_c6_dry_run_writes_nothing` | — |
+| C8 | référence sale → 5, rien écrit | `Parity.test_c8_canonical_guard` | vérifié aussi en dry-run |
+| C9 | dry-run n'avance pas la branche | `Parity.test_c9_dry_run_does_not_advance` | — |
+| D1 | base corrompue → FAIL CLOSED, rien écrit | `Parity.test_d1_corrupt_base_fails_closed` | code exact 6 vérifié |
+| — | fast-forward puis déploiement ; divergence → 4 | `Contract.test_fast_forward_then_deploy`, `Contract.test_diverged_gives_4` | — |
+| — | base absente = base vide, jamais écrite par restore | `Contract.test_absent_base_is_empty` | — |
+| §5.2.4 | un dossier là où va un fichier déployé → 3, dry-run compris, rien écrit | `Contract.test_refusal_before_any_write_dry_run_included` | — |
+| R3-06 | install A → restore B → uninstall sans historique : B supprimé, modification manuelle conservée | `Sequence.test_r3_06_uninstall_after_restore_without_history` | — |
+| R3-06 (§13 littéral) | install A → restore B → install C (archive **sans** le fichier de B) → uninstall sans historique : B intact supprimé, B modifié à la main conservé | `Sequence.test_r3_06_literal_install_c_without_the_b_file`, `test_install.Retained` | décision JYH 2026-11-25 (option 1.4.1) : install garde dans `retained_hashes` les fichiers déjà enregistrés que la source ne livre plus, encore présents et identiques ; limite : un tel fichier sous un dossier `skills/<s>` absent de la liste `skills` n'est pas visé par uninstall |
+| PYI-03 | install A → restore B → install C (archive) : B reconnu ; modification manuelle après B sauvegardée | `Sequence.test_pyi_03_install_a_restore_b_install_c_from_archive` | — |

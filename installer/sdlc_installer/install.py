@@ -261,7 +261,7 @@ def _backup_plan(source, live, targets, registry, opts, out):
     present = [rel for rel in sorted(targets) if os.path.lexists(targets[rel])]
     if not present:
         return []
-    owner = ownership.Ownership(source.repo, registry.file_hashes if registry else None, source.subdir or 'claude')
+    owner = ownership.Ownership(source.repo, manifests.owned_hashes(registry), source.subdir or 'claude')
     unknown = [rel for rel in present if owner.classify_file(live, rel, source.files[rel]) == ownership.UNKNOWN]
     if unknown and owner.history_incomplete:
         out.warn('historique incomplet (shallow clone): some bundle files cannot be recognised')
@@ -296,6 +296,7 @@ def _install_locked(source, live, opts, out):
     _guard(source, live, targets)
     overlay.set_local_overlay_import(live, dry_run=True)       # §6: a non-UTF-8 CLAUDE.md refuses (3) before writing
     to_backup = _backup_plan(source, live, targets, registry, opts, out)
+    retained = _retained(live, targets, registry)
     if to_backup:
         folder, done = backup.backup_files(live, to_backup, 'sdlc')
         out.ok('Backup: %d live file(s) saved -> %s' % (len(done), folder))
@@ -324,12 +325,26 @@ def _install_locked(source, live, opts, out):
     commands, agents = _counts(source.files)
     path = manifests.write_install_registry(live, VERSION, source.skills, live_hashes, source=source.root,
                                             source_commit=source.commit, commands_count=commands,
-                                            agents_count=agents)
+                                            agents_count=agents, retained=retained)
     out.ok('Manifest written: %s' % path)
     _overlay(live, out)
     out.write('Installation complete: version %s, %d skills (%s), %d commands, %d agents, %d files'
               % (VERSION, len(source.skills), ', '.join(source.skills), commands, agents, len(targets)))
     return OK
+
+
+def _retained(live, targets, registry):
+    """R3-06 (decision JYH 2026-11-25, option 1.4.1): files an earlier install or restore recorded that this source does
+    not ship, still present and byte-identical to their record, stay provable in retained_hashes. A file changed
+    since, or gone, is dropped. Read-only; computed before the first mutation."""
+    retained = {}
+    for rel, recorded in sorted((manifests.owned_hashes(registry) or {}).items()):
+        if rel in targets:
+            continue
+        path = paths.safe_target(live, rel)
+        if os.path.isfile(path) and not paths.is_link_or_junction(path) and manifests.file_sha256(path) == recorded:
+            retained[rel] = recorded
+    return retained
 
 
 def _report_verify(source, live, out, fatal):

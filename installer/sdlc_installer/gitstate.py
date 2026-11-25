@@ -54,9 +54,9 @@ def head_commit(repo):
     return None
 
 
-def has_tree(repo, subdir):
-    """True if HEAD:<subdir> is a tree (the reference folder exists in the commit)."""
-    res = _git(repo, 'cat-file', '-t', 'HEAD:' + subdir)
+def has_tree(repo, subdir, rev='HEAD'):
+    """True if <rev>:<subdir> is a tree (the reference folder exists in the commit)."""
+    res = _git(repo, 'cat-file', '-t', rev + ':' + subdir)
     return res.returncode == 0 and _out(res) == 'tree'
 
 

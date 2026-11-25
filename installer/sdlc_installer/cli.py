@@ -1,4 +1,4 @@
-"""Command line (design §2). E3: install and verify; E4: uninstall; the other commands arrive in E5 and E6."""
+"""Command line (design §2). E3: install and verify; E4: uninstall; E5: capture and restore; scan-fuites arrives in E6."""
 import argparse
 import os
 import sys
@@ -35,10 +35,29 @@ def _parser():
     u.add_argument('--force', action='store_true', help='no confirmation prompt')
     u.add_argument('--discover', action='store_true', help='without a readable registry: heuristic discovery')
     u.add_argument('--remove-core', action='store_true', help='also remove the agents/**/sdlc-* agents')
+    c = sub.add_parser('capture', help='propose the live changes to the reference and commit them')
+    _sync_args(c)
+    c.add_argument('--conflict-log', default=None, help='append-only LWW log (default: <live>/conflicts.log)')
+    c.add_argument('--lww', action='store_true', help='resolve modified-both (logged); the reference wins by default')
+    c.add_argument('--provenance', choices=('ref', 'live'), default='ref', help='LWW winner (with --lww; default: ref)')
+    c.add_argument('--adopt', action='store_true', help='first run: adopt the current state despite a divergence')
+    c.add_argument('--dry-run', action='store_true', help='show what would be captured, write nothing')
+    r = sub.add_parser('restore', help='make the live root match the committed reference')
+    _sync_args(r)
+    r.add_argument('--force-restore', action='store_true', help='overwrite a live-only modification (backed up)')
+    r.add_argument('--dry-run', action='store_true', help='show what would be restored, write nothing')
     for name in COMMANDS:
-        if name not in ('install', 'verify', 'uninstall'):
+        if name not in ('install', 'verify', 'uninstall', 'capture', 'restore'):
             sub.add_parser(name, add_help=False).add_argument('rest', nargs=argparse.REMAINDER)
     return parser
+
+
+def _sync_args(p):
+    p.add_argument('--ref', default=REPO, help='reference repository root (default: this repository)')
+    p.add_argument('--live', default=None, help='live root (default: ~/.claude)')
+    p.add_argument('--subdir', default='claude', help=argparse.SUPPRESS)
+    p.add_argument('--manifest-path', default=None, help='sync base (default: <live>/.sync-manifest.json)')
+    p.add_argument('--allow-dirty', action='store_true', help=argparse.SUPPRESS)
 
 
 def _write(line):
@@ -62,6 +81,19 @@ def main(argv=None):
         if args.command == 'uninstall':
             from . import uninstall
             return uninstall.run(live, args.ref, args.force, args.discover, args.remove_core, _write)
+        if args.command in ('capture', 'restore') and args.allow_dirty:
+            # design §7: the dirty-tree rule of these commands has no opt-out.
+            sys.stderr.write('  [ERR] --allow-dirty is not accepted by %s (design §7)\n' % args.command)
+            return USAGE
+        if args.command == 'capture':
+            from . import capture
+            opts = capture.Options(args.ref, live, args.subdir, args.manifest_path, args.conflict_log, args.lww,
+                                   args.provenance, args.adopt, args.dry_run)
+            return capture.run(opts, _write)
+        if args.command == 'restore':
+            from . import restore
+            opts = restore.Options(args.ref, live, args.subdir, args.manifest_path, args.force_restore, args.dry_run)
+            return restore.run(opts, _write)
         if args.command == 'verify':
             from . import verify
             res = verify.verify(args.ref, live, args.subdir)

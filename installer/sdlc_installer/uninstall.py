@@ -129,7 +129,7 @@ def _plan(live, ref, discover, remove_core, out):
     prune = _prune_dirs(live, roots, shallow, skip=reg_rel if registry_dir else None)
 
     hashes = reg.file_hashes if reg is not None else None
-    owner, has_history = _owner(ref, hashes, out)
+    owner, has_history = _owner(ref, manifests.owned_hashes(reg), out)
     # §1 decision 3 (E4-R1-02): only a READABLE registry without file_hashes, and no history, removes everything.
     legacy_all = reg is not None and hashes is None and not has_history
     remove, keep = [], []

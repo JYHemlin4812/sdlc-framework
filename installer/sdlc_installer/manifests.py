@@ -154,8 +154,31 @@ def skill_name(skill_md_path):
 # --- install registry -----------------------------------------------------------------------
 
 InstallRegistry = collections.namedtuple(
-    'InstallRegistry', 'version skills skills_derived checksum file_hashes source_commit raw warnings restored')
-InstallRegistry.__new__.__defaults__ = (False,)
+    'InstallRegistry', 'version skills skills_derived checksum file_hashes source_commit raw warnings restored retained')
+InstallRegistry.__new__.__defaults__ = (False, None)
+
+
+def owned_hashes(registry):
+    """rel -> sha256 that prove bundle ownership (§3 point 3): file_hashes plus retained_hashes (files deployed by an
+    earlier install or restore that the current source no longer ships, still present and unchanged, R3-06).
+    None for a legacy registry without file_hashes."""
+    if registry is None or registry.file_hashes is None:
+        return None
+    owned = dict(registry.retained or {})
+    owned.update(registry.file_hashes)
+    return owned
+
+
+def _hash_map(fields, key, path, live_root):
+    """A rel -> sha256 object of the registry, lower-cased; absent: None; anything else: corrupt. Keys are checked
+    lexically and through their physical parent chain before any caller acts on them (E2-R1-06)."""
+    if key not in fields:
+        return None
+    value = fields[key]
+    if not isinstance(value, dict) or not all(isinstance(v, str) and _HEX64.fullmatch(v) for v in value.values()):
+        raise CorruptRegistry('corrupt install registry (%s): %s' % (key, path))
+    paths.check_all(live_root, list(value))
+    return {rel: v.lower() for rel, v in value.items()}
 
 
 def _derive_skills(live_root, warnings):
@@ -212,15 +235,8 @@ def read_install_registry(live_root):
     checksum = checksum.lower()
 
     # E2-R1-01: an absent key is the legacy format; a present key must be an object (null is corrupt).
-    hashes = None
-    if 'file_hashes' in fields:
-        hashes = fields['file_hashes']
-        if not isinstance(hashes, dict) or not all(
-                isinstance(v, str) and _HEX64.fullmatch(v) for v in hashes.values()):
-            raise CorruptRegistry('corrupt install registry (file_hashes): %s' % path)
-        # E2-R1-06: lexical check AND physical parent chain, before any caller acts on a key.
-        paths.check_all(live_root, list(hashes))
-        hashes = {rel: v.lower() for rel, v in hashes.items()}
+    hashes = _hash_map(fields, 'file_hashes', path, live_root)
+    retained = _hash_map(fields, 'retained_hashes', path, live_root)
 
     derived = False
     if 'skills' in fields:
@@ -241,13 +257,15 @@ def read_install_registry(live_root):
     commit = fields.get('source_commit')
     return InstallRegistry(version, list(skills), derived, checksum, hashes,
                            commit if isinstance(commit, str) else None, raw, warnings,
-                           'restored_at' in fields)
+                           'restored_at' in fields, retained or {})
 
 
 def write_install_registry(live_root, version, skills, hashes, source=None, source_commit=None,
-                           commands_count=0, agents_count=0, now=None):
+                           commands_count=0, agents_count=0, now=None, retained=None):
     """Write the install registry atomically (call only after an acceptable post-check, §8.1 step 6).
-    `hashes`: rel -> sha256 read back from the live tree. Returns the registry path."""
+    `hashes`: rel -> sha256 read back from the live tree. `retained`: rel -> sha256 of earlier bundle files this
+    source does not ship, still present and unchanged (R3-06); kept apart so that file_hashes stays the snapshot
+    of this install. Returns the registry path."""
     for name in skills:
         if not domain.is_valid_skill_name(name):
             raise SecurityError('invalid skill name: %r' % (name,))
@@ -266,6 +284,10 @@ def write_install_registry(live_root, version, skills, hashes, source=None, sour
         ('checksum_sha256', aggregate_checksum(hashes)),
         ('file_hashes', dict((k, hashes[k].lower()) for k in sorted(hashes))),
     ])
+    retained = dict((k, v) for k, v in (retained or {}).items() if k not in hashes)
+    if retained:
+        paths.check_all(live_root, list(retained))
+        doc['retained_hashes'] = dict((k, retained[k].lower()) for k in sorted(retained))
     if source_commit:
         doc['source_commit'] = source_commit
     doc['installer'] = 'install.py'
@@ -273,23 +295,62 @@ def write_install_registry(live_root, version, skills, hashes, source=None, sour
     return _write_json(paths.safe_target(live_root, INSTALL_REGISTRY_REL), doc)
 
 
-def update_file_hashes(live_root, updates, skills=None):
+def _spelled_apart(old, new_prefixes):
+    """True if `old` or one of its parent folders is spelled, apart from case, like a path or folder of the trace
+    with another spelling (E5-R1-05, E5-R2-07)."""
+    parts = old.split('/')
+    for i in range(1, len(parts) + 1):
+        prefix = '/'.join(parts[:i])
+        spelled = new_prefixes.get(prefix.casefold())
+        if spelled is not None and spelled != prefix:
+            return True
+    return False
+
+
+def trace_tables(registry, updates):
+    """(file_hashes, retained_hashes) after restore's trace: `updates` win; an old key of either table that names
+    the same file or folder as a traced path apart from case (commands/sdlc/Old.md against old.md, Old/a.md
+    against old/b.md) is superseded, since the deployment made the new spelling the one on disk.
+    restore validates both tables together before its first mutation."""
+    new = dict((rel, h.lower()) for rel, h in updates.items())
+    prefixes = {}
+    for rel in new:
+        parts = rel.split('/')
+        for i in range(1, len(parts) + 1):
+            prefix = '/'.join(parts[:i])
+            prefixes.setdefault(prefix.casefold(), prefix)
+    merged = dict((rel, h) for rel, h in registry.file_hashes.items()
+                  if rel not in new and not _spelled_apart(rel, prefixes))
+    merged.update(new)
+    retained = dict((rel, h) for rel, h in (registry.retained or {}).items()
+                    if rel not in merged and not _spelled_apart(rel, prefixes))
+    return merged, retained
+
+
+def check_trace(live_root, registry, updates):
+    """Both final tables of the trace are valid together (names, case, physical parents), before any mutation."""
+    merged, retained = trace_tables(registry, updates)
+    paths.check_all(live_root, list(merged) + list(retained))
+    return merged, retained
+
+
+def update_file_hashes(live_root, updates, skills=None, registry=None):
     """restore's deployment trace (§4 point 1, R3-06): add or update file_hashes[rel] under the same lock.
     Never creates a registry, and never creates `file_hashes` in a registry that has none (that would turn
     a legacy install, which uninstall removes whole, into one where unlisted files look foreign).
     `skills`: the skills now deployed, when restore knows them; the registry list is replaced so that uninstall
-    forgets nothing (E2-R2-03). Returns True if the registry was updated."""
+    forgets nothing (E2-R2-03). `registry`: the registry restore read and validated before its first mutation,
+    under the same lock (E5-R1-05): re-reading it after deployment would refuse a key that a deployed file now
+    spells differently, although the merge supersedes that key. Returns True if the registry was updated."""
     paths.check_all(live_root, list(updates))         # E2-R1-06
     if skills is not None:
         for name in skills:
             if not domain.is_valid_skill_name(name):
                 raise SecurityError('invalid skill name: %r' % (name,))
-    reg = read_install_registry(live_root)
+    reg = registry if registry is not None else read_install_registry(live_root)
     if reg is None or reg.file_hashes is None:
         return False
-    merged = dict(reg.file_hashes)
-    merged.update({rel: h.lower() for rel, h in updates.items()})
-    paths.check_all(live_root, list(merged))          # E2-R2-04: the merged set must stay readable
+    merged, kept = check_trace(live_root, reg, updates)     # E2-R2-04: the merged set must stay readable
     replaced = ('file_hashes', 'files_count', 'restored_at') + (('skills',) if skills is not None else ())
     doc = dict((k, v) for k, v in reg.raw.items() if k.lower() not in replaced)
     doc['file_hashes'] = dict((k, merged[k]) for k in sorted(merged))
@@ -299,6 +360,9 @@ def update_file_hashes(live_root, updates, skills=None):
     doc['restored_at'] = datetime.datetime.now(datetime.timezone.utc).astimezone().isoformat()
     if skills is not None:
         doc['skills'] = list(skills)
+    doc = dict((k, v) for k, v in doc.items() if k.lower() != 'retained_hashes')
+    if kept:
+        doc['retained_hashes'] = dict((k, kept[k]) for k in sorted(kept))
     _write_json(paths.safe_target(live_root, INSTALL_REGISTRY_REL), doc)
     return True
 

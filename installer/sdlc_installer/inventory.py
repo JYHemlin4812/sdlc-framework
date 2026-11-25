@@ -25,9 +25,10 @@ def head_inventory(repo, subdir='claude'):
     return sorted(head_blob_ids(repo, subdir))
 
 
-def head_blob_ids(repo, subdir='claude'):
-    """rel -> Git blob id of each domain file committed at HEAD as a regular file (same checks as head_inventory)."""
-    res = _git(repo, 'ls-tree', '-r', '-z', 'HEAD', '--', subdir)
+def head_blob_ids(repo, subdir='claude', rev='HEAD'):
+    """rel -> Git blob id of each domain file committed at `rev` (HEAD by default) as a regular file (same checks as
+    head_inventory). restore passes the fast-forward target (E5-R1-01)."""
+    res = _git(repo, 'ls-tree', '-r', '-z', rev, '--', subdir)
     if res.returncode != 0:
         raise UsageError('cannot read HEAD of %s: %s' % (repo, res.stderr.decode('utf-8', 'replace').strip()))
     prefix = subdir.rstrip('/') + '/'

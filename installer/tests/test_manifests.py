@@ -357,14 +357,23 @@ class WriteRegistry(TempDirCase):
             manifests.read_install_registry(self.tmp)
 
     def test_update_keeps_a_registry_readable(self):
-        """E2-R2-04: the MERGED key set is checked, so a case-only rename is refused and bytes are kept."""
+        """E2-R2-04: the MERGED key set is checked and the registry stays readable. E5-R1-05: a key spelled like an
+        updated one apart from case is superseded (one file on a case-insensitive filesystem); a file on disk
+        spelled differently from the update is still refused, bytes kept."""
         manifests.write_install_registry(self.tmp, '4.0.0', ['sdlc'], {'agents/sdlc-A.md': HASH_A})
+        self.assertTrue(manifests.update_file_hashes(self.tmp, {'agents/sdlc-a.md': HASH_B}))
+        self.assertEqual(manifests.read_install_registry(self.tmp).file_hashes, {'agents/sdlc-a.md': HASH_B})
+        manifests.write_install_registry(self.tmp, '4.0.0', ['sdlc'], {'agents/sdlc-A.md': HASH_A})
+        os.makedirs(os.path.join(self.tmp, 'agents'), exist_ok=True)
+        with open(os.path.join(self.tmp, 'agents', 'sdlc-A.md'), 'wb') as fh:
+            fh.write(b'A\n')
         with open(_registry_path(self.tmp), 'rb') as fh:
             before = fh.read()
-        with self.assertRaises(SecurityError):
-            manifests.update_file_hashes(self.tmp, {'agents/sdlc-a.md': HASH_B})
-        with open(_registry_path(self.tmp), 'rb') as fh:
-            self.assertEqual(fh.read(), before)
+        if os.path.exists(os.path.join(self.tmp, 'agents', 'sdlc-a.md')):      # case-insensitive filesystem
+            with self.assertRaises(SecurityError):
+                manifests.update_file_hashes(self.tmp, {'agents/sdlc-a.md': HASH_B})
+            with open(_registry_path(self.tmp), 'rb') as fh:
+                self.assertEqual(fh.read(), before)
         self.assertIsNotNone(manifests.read_install_registry(self.tmp))
 
     def test_update_refuses_unsafe_key(self):

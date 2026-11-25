@@ -615,6 +615,61 @@ class Contract(InstallCase):
         backed = [d for d in self.backups(live)]
         self.assertTrue(any(has(os.path.join(live, '_backups', d), 'agents/sdlc-architect.md') for d in backed))
 
+class Retained(InstallCase):
+    """R3-06 (decision JYH 2026-11-25, option 1.4.1): files an earlier version deployed and this source no longer ships
+    stay provable through retained_hashes while they are present and unchanged."""
+
+    def test_untouched_old_file_retained_and_idempotence_kept(self):
+        repo, ref, live = self.new_case('ret', seed=dict(SEED, **{'agents/sdlc-old.md': b'old agent\n'}))
+        self.assertEqual(self.install(ref, live)[0], 0)
+        os.remove(os.path.join(ref, 'agents', 'sdlc-old.md'))
+        git(repo, 'commit', '-q', '-am', 'drop old agent')
+        code, out = self.install(ref, live)
+        self.assertEqual(code, 0, out)
+        reg = self.registry(live)
+        self.assertEqual(reg['retained_hashes'], {'agents/sdlc-old.md': manifests.sha256_hex(b'old agent\n')})
+        self.assertNotIn('agents/sdlc-old.md', reg['file_hashes'])
+        self.assertEqual(reg['files_count'], len(reg['file_hashes']))
+        code, out = self.install(ref, live)                 # file_hashes is still this install's snapshot
+        self.assertEqual(code, 0, out)
+        self.assertIn('Already up to date', out)
+        owned = manifests.owned_hashes(manifests.read_install_registry(live))
+        self.assertIn('agents/sdlc-old.md', owned)
+
+    def test_changed_or_removed_old_file_is_dropped(self):
+        repo, ref, live = self.new_case('drop', seed=dict(SEED, **{'agents/sdlc-old.md': b'old\n',
+                                                                   'agents/sdlc-gone.md': b'gone\n'}))
+        self.assertEqual(self.install(ref, live)[0], 0)
+        for rel in ('agents/sdlc-old.md', 'agents/sdlc-gone.md'):
+            os.remove(os.path.join(ref, *rel.split('/')))
+        git(repo, 'commit', '-q', '-am', 'drop two agents')
+        put(live, 'agents/sdlc-old.md', b'edited by hand\n')
+        os.remove(os.path.join(live, 'agents', 'sdlc-gone.md'))
+        code, out = self.install(ref, live)
+        self.assertEqual(code, 0, out)
+        self.assertNotIn('retained_hashes', self.registry(live))
+
+    def test_retained_hashes_schema(self):
+        live = os.path.join(self.tmp, 'schema')
+        put(live, 'skills/sdlc/SKILL.md', b'x\n')
+        h = manifests.sha256_hex(b'x\n')
+        manifests.write_install_registry(live, '3.2.0', ['sdlc'], {'skills/sdlc/SKILL.md': h},
+                                         retained={'skills/sdlc/SKILL.md': h, 'agents/sdlc-a.md': 'A' * 64})
+        reg = manifests.read_install_registry(live)
+        self.assertEqual(reg.retained, {'agents/sdlc-a.md': 'a' * 64})     # a key of file_hashes is never duplicated
+        self.assertEqual(manifests.owned_hashes(reg), {'skills/sdlc/SKILL.md': h, 'agents/sdlc-a.md': 'a' * 64})
+        doc = self.registry(live)
+        for bad in ([], None, {'agents/sdlc-a.md': 'short'}):
+            doc['retained_hashes'] = bad
+            put(live, REGISTRY, json.dumps(doc).encode('utf-8'))
+            with self.assertRaises(manifests.CorruptRegistry):
+                manifests.read_install_registry(live)
+        doc['retained_hashes'] = {'../x': h}
+        put(live, REGISTRY, json.dumps(doc).encode('utf-8'))
+        from sdlc_installer.errors import SecurityError
+        with self.assertRaises(SecurityError):
+            manifests.read_install_registry(live)
+
 
 if __name__ == '__main__':
     unittest.main()

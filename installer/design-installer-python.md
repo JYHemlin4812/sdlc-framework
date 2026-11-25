@@ -59,7 +59,7 @@ Limites :
 - L'historique ne remonte qu'au 2026-09-29 (`6f33a9b`, 8 commits sur HEAD ; dépôt non superficiel ; `public-main` est un ancêtre de HEAD). Un fichier d'une version antérieure (v3) est « d'origine inconnue ».
 - Un clone superficiel (`--depth`) a moins d'historique : même effet. install le signale (« historique incomplet »).
 - Passage d'une source à une autre (R3-06) : install A, restore B depuis un dépôt, puis install C depuis une archive (sans historique). B n'est prouvable que par la trace de déploiement de restore (§4, point 1) ; c'est pourquoi restore l'écrit.
-- Reconnaître une ancienne installation par l'agrégat `checksum_sha256` : **non vérifié**. Un recalcul naïf (`rel:sha256\n` triés) sur l'installation réelle ne redonne pas l'agrégat enregistré par `install.ps1` ; il faut lire `Get-GreenlistChecksum` (`install.ps1`) en E2 avant de s'en servir.
+- Agrégat `checksum_sha256` (établi en E2) : lignes `rel:sha256\n` ; `install.sh` trie en octets (`LC_ALL=C`), `install.ps1` sans casse (`Sort-Object`). Python écrit l'ordre en octets et reconnaît les deux (`manifests.aggregate_matches`) ; avec `file_hashes`, la comparaison se fait fichier par fichier. Limite acceptée (E2-R1-08) : un agrégat `.ps1` dont l'ordre de collation .NET diffère n'est pas reconnu, ce qui provoque une réinstallation, jamais un faux « à jour ».
 
 Effets par commande :
 
@@ -135,7 +135,7 @@ Relevés dans `install.ps1`, `capture.ps1`, `restore.ps1`, `verify.ps1` (en-têt
 2. Dry-run : refait les contrôles 3 et 4 sans verrou, liste ce qui serait déployé, 0 écriture, retour 0.
 3. Hors dry-run, **verrou pris d'abord** (R3-09), puis contrôles qui décident, refaits sous verrou : inventaire et agrégat de la source ; si égal au registre et sans `--force` : verify ; live intact → overlay puis « déjà à jour », 0 (tout sous verrou) ; live abîmé → réparation (comportement actuel F4).
 4. Garde des skills tiers (sous verrou) : `SKILL.md` cible avec `name:` illisible ou hors `sdlc*` → 3, rien écrit. Contrôles de chemins §5.2 sur tout l'ensemble.
-5. Les octets déployés sont vérifiés contre la source choisie (HEAD, arbre de travail avec `--allow-dirty`, ou archive) (R3-01).
+5. Les octets déployés sont vérifiés contre la source choisie (HEAD, arbre de travail avec `--allow-dirty`, ou archive) (R3-01). Décision JYH du 2026-11-24 (E3) : depuis un worktree propre, install déploie les **blobs de HEAD** (`git cat-file --batch`), pas l'arbre de travail ; chaque octet source est lu une fois, sous verrou, et sert au déploiement, au registre et au post-contrôle. Registre corrompu : avertissement puis écrasement (comme les scripts). `version` du registre : `3.2.0`, constante des scripts.
 6. Toujours sous le même verrou : staging hors live → sauvegarde des fichiers live présents (§3 pour l'origine inconnue) → remplacement atomique fichier par fichier → post-contrôle verify classé (0 écart ; indisponible ; orphelins seuls ; arbre sale ; écart réel → 7) → registre écrit seulement après un post-contrôle acceptable, puis overlay ; verrou libéré à la fin.
 7. Overlay `CLAUDE.local.md` en fin de parcours nominal et sur « déjà à jour » ; jamais d'autre ligne.
 8. install est additif : il ne supprime jamais un orphelin (c'est le rôle de restore).

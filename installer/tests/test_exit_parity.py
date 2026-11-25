@@ -129,6 +129,40 @@ class ExitCodeParity(TempDirCase):
         git(self.repo, 'branch', '--set-upstream-to=up')
         self.expect('restore', self.sync_args(self.ref, self.live), 4, self.live)
 
+    def _install_drift_gives_7(self, shell):
+        """E1-R5-04: post-check drift against a CLEAN reference gives exactly 7, and no registry is published.
+        A working-tree change hidden from 'git status' (assume-unchanged) is deployed by the script and then
+        differs from HEAD. A registry written by an earlier install stays byte for byte."""
+        kind = shell[0]
+        registry = os.path.join('skills', 'sdlc', '.install-manifest.json')
+        prev, fresh = os.path.join(self.tmp, 'prev'), os.path.join(self.tmp, 'fresh')
+
+        def args(live):
+            return {'sh': ['--source-root', self.ref, '--claude-root', live],
+                    'ps1': ['-SourceRoot', self.ref, '-ClaudeRoot', live]}
+        self.assertEqual(run(shell, 'install', args(prev)), 0)
+        with open(os.path.join(prev, registry), 'rb') as fh:
+            before = fh.read()
+        git(self.repo, 'update-index', '--assume-unchanged', 'claude/commands/sdlc/dev.md')
+        with open(os.path.join(self.ref, 'commands', 'sdlc', 'dev.md'), 'wb') as fh:
+            fh.write(b'hidden working-tree change\n')
+        status = subprocess.run(['git', '-C', self.repo, 'status', '--porcelain', '--', 'claude'],
+                                stdout=subprocess.PIPE, check=True).stdout
+        self.assertEqual(status, b'')
+        self.assertEqual(run(shell, 'install', args(fresh)), 7, kind)
+        self.assertFalse(os.path.exists(os.path.join(fresh, registry)))
+        self.assertEqual(run(shell, 'install', args(prev)), 7, kind)
+        with open(os.path.join(prev, registry), 'rb') as fh:
+            self.assertEqual(fh.read(), before)
+
+    @unittest.skipUnless(BASH, 'bash missing: E1-R5-04 NOT proven for install.sh')
+    def test_install_clean_reference_drift_gives_7_sh(self):
+        self._install_drift_gives_7(('sh', BASH))
+
+    @unittest.skipUnless(PWSH, 'pwsh missing: E1-R5-04 NOT proven for install.ps1')
+    def test_install_clean_reference_drift_gives_7_ps1(self):
+        self._install_drift_gives_7(('ps1', PWSH))
+
     def test_lock_held_gives_1(self):
         lock = os.path.join(self.live, '.sync.lock')
         for form in ('file', 'dir'):

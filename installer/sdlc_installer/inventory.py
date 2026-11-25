@@ -22,16 +22,22 @@ def _git(repo, *args):
 
 def head_inventory(repo, subdir='claude'):
     """Domain relative paths (relative to <repo>/<subdir>) committed at HEAD as regular files."""
+    return sorted(head_blob_ids(repo, subdir))
+
+
+def head_blob_ids(repo, subdir='claude'):
+    """rel -> Git blob id of each domain file committed at HEAD as a regular file (same checks as head_inventory)."""
     res = _git(repo, 'ls-tree', '-r', '-z', 'HEAD', '--', subdir)
     if res.returncode != 0:
         raise UsageError('cannot read HEAD of %s: %s' % (repo, res.stderr.decode('utf-8', 'replace').strip()))
     prefix = subdir.rstrip('/') + '/'
-    rels = []
+    ids = {}
     for record in res.stdout.split(b'\0'):
         if not record:
             continue
         meta, _, raw_path = record.partition(b'\t')
-        mode = meta.split(b' ')[0]
+        fields = meta.split(b' ')
+        mode = fields[0]
         # E1-R4-04: undecodable bytes survive classification (surrogateescape); validate_rel refuses
         # them only for a managed path, so an excluded or unrelated name does not block the bundle.
         path = raw_path.decode('utf-8', 'surrogateescape')
@@ -52,9 +58,9 @@ def head_inventory(repo, subdir='claude'):
             continue
         if not domain.in_domain(rel):
             continue
-        rels.append(paths.validate_rel(rel))
-    paths.check_unique(rels)
-    return sorted(rels)
+        ids[paths.validate_rel(rel)] = fields[2].decode('ascii')
+    paths.check_unique(list(ids))
+    return ids
 
 
 def tree_inventory(root):

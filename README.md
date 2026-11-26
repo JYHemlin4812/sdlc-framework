@@ -43,33 +43,23 @@ Upgrading from v3.x: see [`bundle/MIGRATION_v3_v4.md`](bundle/MIGRATION_v3_v4.md
 
 ## Quickstart
 
-Clone the repository and run the installer — under 5 minutes, no prior configuration. Both
-commands deploy the same content (`sdlc*` skills, `/sdlc:*` commands, `sdlc-*` agents) to
-`~/.claude/` and report the same result.
-
-### PowerShell (Windows)
-
-```powershell
-git clone https://github.com/JYHemlin4812/sdlc-framework.git
-cd sdlc-framework
-pwsh bundle/scripts/install.ps1
-```
-
-### Bash (Linux/macOS)
+Clone the repository and run the installer — under 5 minutes, no prior configuration. It needs
+Python 3.9+ and git, and deploys the `sdlc*` skills, `/sdlc:*` commands and `sdlc-*` agents to
+`~/.claude/` (Windows and Linux; macOS not verified yet).
 
 ```bash
 git clone https://github.com/JYHemlin4812/sdlc-framework.git
 cd sdlc-framework
-bash bundle/scripts/install.sh
+python installer/install.py install      # python3 on Linux
 ```
 
-**Expected result (both commands)**: an `Installation complete` report listing the number of
-skills/commands/agents deployed and the target path (`~/.claude/` by default). Restart Claude
-Code, then run `/sdlc:init` in your project (or `/sdlc:status` to check the install).
+**Expected result**: an `Installation complete` line with the number of skills/commands/agents
+deployed and the version. Restart Claude Code, then run `/sdlc:init` in your project (or
+`/sdlc:status` to check the install).
 
-Useful options (same in both scripts, native flag style per shell):
-`-DryRun`/`--dry-run` (simulation, no writes), `-Force`/`--force` (reinstall even if up to date),
-`-NoBackup`/`--no-backup` (no timestamped backup before replacing).
+Useful options: `--dry-run` (simulation, no writes), `--force` (reinstall even if up to date),
+`--no-backup` (no backup of bundle files before replacing). The former `bundle/scripts/install.ps1`
+and `install.sh` are deprecated and will be removed in the next release.
 
 ## Typical workflow
 

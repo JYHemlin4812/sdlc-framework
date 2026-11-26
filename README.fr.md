@@ -45,34 +45,23 @@ Mise à niveau depuis la v3.x : voir [`bundle/MIGRATION_v3_v4.md`](bundle/MIGRAT
 
 ## Démarrage rapide
 
-Clonez le dépôt puis lancez l'installeur — moins de 5 minutes, sans configuration préalable. Les
-deux commandes déploient le même contenu (skills `sdlc*`, commandes `/sdlc:*`, agents `sdlc-*`)
-vers `~/.claude/` et annoncent le même résultat.
-
-### PowerShell (Windows)
-
-```powershell
-git clone https://github.com/JYHemlin4812/sdlc-framework.git
-cd sdlc-framework
-pwsh bundle/scripts/install.ps1
-```
-
-### Bash (Linux/macOS)
+Clonez le dépôt puis lancez l'installeur — moins de 5 minutes, sans configuration préalable. Il
+demande Python 3.9 ou plus et git, et déploie les skills `sdlc*`, les commandes `/sdlc:*` et les
+agents `sdlc-*` vers `~/.claude/` (Windows et Linux ; macOS pas encore vérifié).
 
 ```bash
 git clone https://github.com/JYHemlin4812/sdlc-framework.git
 cd sdlc-framework
-bash bundle/scripts/install.sh
+python installer/install.py install      # python3 sous Linux
 ```
 
-**Résultat attendu (les deux commandes)** : un rapport `Installation complete` indiquant le nombre
-de skills/commandes/agents déployés et le chemin cible (`~/.claude/` par défaut). Redémarrez
-Claude Code, puis lancez `/sdlc:init` dans votre projet (ou `/sdlc:status` pour vérifier
-l'installation).
+**Résultat attendu** : une ligne `Installation complete` avec le nombre de skills/commandes/agents
+déployés et la version. Redémarrez Claude Code, puis lancez `/sdlc:init` dans votre projet (ou
+`/sdlc:status` pour vérifier l'installation).
 
-Options utiles (identiques dans les deux scripts, syntaxe native de chaque shell) :
-`-DryRun`/`--dry-run` (simulation, aucune écriture), `-Force`/`--force` (réinstalle même si à
-jour), `-NoBackup`/`--no-backup` (pas de sauvegarde horodatée avant remplacement).
+Options utiles : `--dry-run` (simulation, aucune écriture), `--force` (réinstalle même si à jour),
+`--no-backup` (pas de sauvegarde des fichiers du bundle avant remplacement). Les anciens scripts
+`bundle/scripts/install.ps1` et `install.sh` sont dépréciés et seront retirés à la prochaine version.
 
 ## Déroulé type
 

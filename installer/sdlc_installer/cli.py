@@ -1,4 +1,4 @@
-"""Command line (design §2). E3: install and verify; E4: uninstall; E5: capture and restore; scan-fuites arrives in E6."""
+"""Command line (design §2). E3: install and verify; E4: uninstall; E5: capture and restore; E6: scan-fuites."""
 import argparse
 import os
 import sys
@@ -46,9 +46,11 @@ def _parser():
     _sync_args(r)
     r.add_argument('--force-restore', action='store_true', help='overwrite a live-only modification (backed up)')
     r.add_argument('--dry-run', action='store_true', help='show what would be restored, write nothing')
-    for name in COMMANDS:
-        if name not in ('install', 'verify', 'uninstall', 'capture', 'restore'):
-            sub.add_parser(name, add_help=False).add_argument('rest', nargs=argparse.REMAINDER)
+    s = sub.add_parser('scan-fuites', help='read-only leak scan of the repository; writes a report')
+    s.add_argument('--repo-root', default=REPO, help='repository to scan (default: this repository)')
+    s.add_argument('--motifs-path', default=None, help='level-2 patterns (default: <repo>/SDLC_PM/scan-fuites-motifs.txt)')
+    s.add_argument('--report-path', default=None,
+                   help='report file (default: <repo>/SDLC_PM/SP6-productisation/rapport-scan-fuites-<date>.md)')
     return parser
 
 
@@ -94,6 +96,9 @@ def main(argv=None):
             from . import restore
             opts = restore.Options(args.ref, live, args.subdir, args.manifest_path, args.force_restore, args.dry_run)
             return restore.run(opts, _write)
+        if args.command == 'scan-fuites':
+            from . import scanfuites
+            return scanfuites.run(args.repo_root, args.motifs_path, args.report_path, _write)
         if args.command == 'verify':
             from . import verify
             res = verify.verify(args.ref, live, args.subdir)

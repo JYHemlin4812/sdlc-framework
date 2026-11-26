@@ -64,7 +64,7 @@ which follows instructions closely, so:
 Before opening a PR, run both test suites from the **repository root**:
 
 ```bash
-for t in bundle/scripts/tests/test-*.sh; do bash "$t" || exit 1; done
+python -B -m unittest discover -s installer/tests -t installer
 PYTHONUTF8=1 python -m pytest -q claude/skills
 ```
 

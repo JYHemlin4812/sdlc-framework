@@ -2,12 +2,12 @@
 
 ## Working on this repository
 
-- **Install**: `bundle/scripts/install.ps1` (Windows) or `bundle/scripts/install.sh` (Unix) —
-  see these scripts for how the bundle is activated under `~/.claude/`.
+- **Install**: `python installer/install.py install` — see `installer/` for how the bundle is
+  activated under `~/.claude/`.
 - **Validation before any PR** (exit code 0 required for both):
 
   ```bash
-  for t in bundle/scripts/tests/test-*.sh; do bash "$t" || exit 1; done
+  python -B -m unittest discover -s installer/tests -t installer
   PYTHONUTF8=1 python -m pytest -q claude/skills
   ```
 

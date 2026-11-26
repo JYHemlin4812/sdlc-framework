@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - `installer/`: first step (E1) of the Python installer: domain, derived inventory, path safety, atomic replace, shared lock, backups, single entry point `installer/install.py`, and an exit-code parity suite against the Bash and PowerShell scripts.
+- Python installer, steps E2 to E6: `python installer/install.py install | verify | uninstall | capture | restore | scan-fuites` (Python 3.9+, standard library only, git 2.26+), with ownership proof by recorded hashes or Git history, and the differences from the scripts listed in `installer/parite.md`.
+
+### Deprecated
+- The PowerShell and bash scripts in `bundle/scripts/`: the documentation now points to `installer/install.py`; the scripts will be removed in the next release.
 
 ### Removed
 - Removed every reference to components outside this repository: the interop document, the import line in `CLAUDE.md` (the installer no longer adds, reads or removes it, and keeps it when present), the `--remove-import` option, the external agents and core file in `--remove-core` (which now removes only the `sdlc-*` agents), and the zone of `scan-fuites` that matched an external folder.

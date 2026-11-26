@@ -2,8 +2,10 @@
 
 **Bidirectional** synchronization between the live install (`~/.claude/`) and the versioned
 canonical tree (`sdlc-framework/claude/` at git `HEAD`), with safeguards against data loss.
-Two implementations with **identical behavior**: PowerShell (`.ps1`, reference) and bash
-(`.sh`, parity port P018).
+One implementation for every platform: `python installer/install.py <command>` (Python 3.9+,
+standard library only). The former PowerShell and bash scripts in `bundle/scripts/` are
+deprecated and will be removed in the next release; their documented differences from the
+Python installer are listed in `installer/parite.md`.
 
 ## Synced domains
 
@@ -13,37 +15,34 @@ Only these domains are synced (the rest of `~/.claude/` is ignored):
 |---|---|
 | Skills | `skills/sdlc*` (**excludes** `skills/sdlc/commands/**`) |
 | Commands | `commands/sdlc` |
-| Agents | `agents/sdlc-*` |
+| Agents | `agents/**/sdlc-*` (any depth) |
 
-Cross-cutting exclusions (single source: `get_sync_exclusion`): `__pycache__`, `.*cache`,
-`_backups`/`_backup`, `*.pyc`/`*.pyo`/`*.bak`, `.sync-manifest.json`, `conflicts.log`,
-`.install-manifest.json`.
+Cross-cutting exclusions (single source: `installer/sdlc_installer/domain.py`): folders `__pycache__`,
+`.pytest_cache`, `.mypy_cache`, `.ruff_cache`, `_backups`, `_backup`; files `*.pyc`, `*.pyo`, `*.bak`,
+`.sync-manifest.json`, `conflicts.log`, `.install-manifest.json` (names compared without case).
 
-## Scripts
+## Commands
 
-| Script | Direction | Role |
+| Command | Direction | Role |
 |---|---|---|
-| `capture` | live → ref → git | Captures local changes into the canonical tree and commits them (explicit pathspec `claude/<rel>`, never `git add -A`). |
-| `restore` | git → ref → live | Deploys the committed canonical tree to the install (staging + atomic swap + backup). |
+| `capture` | live → ref → git | Captures local changes into the canonical tree and commits only the copied paths (changes staged elsewhere stay staged). |
+| `restore` | git → live | Deploys the committed canonical tree (`HEAD`, or its upstream after a fast-forward) to the install, with backups. |
 | `verify` | — (read-only) | Checks that `live` matches the **committed HEAD** (`git cat-file`, never the working tree). |
-| `install` | source → live | **Additive** disaster-recovery bootstrap (a subset of restore, no deletes). |
-| `sync-lib` | — | Foundation sourced by all the others (hashing, lock, atomic write, greenlist, state classifier, manifest). |
+| `install` | source → live | **Additive** bootstrap (no deletes). |
+| `scan-fuites` | — (read-only) | Leak scan of the repository before a public release; writes a report. |
 
-`.ps1`: run with `pwsh -NoProfile -File <script>.ps1`.
-`.sh`: run with `bash <script>.sh`.
+Run them as `python installer/install.py <command> [options]` from the repository root.
 
 ## Prerequisites
 
-| | PowerShell | bash |
-|---|---|---|
-| Interpreter | **PowerShell 7+** | **bash 4+** (macOS `/bin/bash` 3.2 is refused with exit 2 — `brew install bash`) |
-| Git | required (capture/restore/verify) | same |
-| Hashing | `Get-FileHashByteExact` (native) | `sha256sum` |
-| JSON manifest | native | **Python 3** (`python`, then `python3`; override with `SYNC_PY`) |
+| | |
+|---|---|
+| Python | 3.9 or later, standard library only |
+| Git | 2.26 or later (capture/restore/verify) |
 
-Hashing is **byte-exact** (SHA256 over raw bytes, CRLF ≠ LF), so fidelity is guaranteed
-across tools for capture → push → restore. The bash manifest is machine-local (outside the
-worktree) and is **not** required to be byte-identical to the PowerShell one.
+Hashing is **byte-exact** (SHA256 over raw bytes, CRLF ≠ LF), so fidelity is guaranteed for
+capture → push → restore. The sync base (`~/.claude/.sync-manifest.json`) is machine-local,
+outside the worktree.
 
 ## Sync states
 
@@ -54,32 +53,35 @@ Each file is classified by comparing ref, live and the base (last synced hash):
 
 ## Safeguards (data loss)
 
-- **O_EXCL lock** around every mutation (atomic `mkdir` in bash, since `flock` is not portable); released on exit.
+- **O_EXCL lock** (`~/.claude/.sync.lock`) around every mutation; released on exit. A dry-run takes no lock and writes nothing.
 - **Atomic write**: temp file + rename (`mv -f` / `Replace`), never in place. A **failed write** aborts before any destructive action.
 - **Timestamped backup** under `_backups/` (excluded from sync) **before** any replacement or deletion.
 - Exclusive **per-relPath greenlist** + path-traversal guard; **no destructive mirror** (`/MIR`, `rsync --delete`, `cp -r`).
 - **Corrupt manifest** → **fail-closed** (empty base, never "identical" by default).
-- **Blocks**: `capture`/`restore` refuse to write (`exit 3`) when both sides changed.
-- **restore — canonical guard**: aborts (`exit 5`) if the ref working tree (`claude/`) is not clean, **before** any write.
+- **Blocks**: `capture`/`restore` refuse to write (`exit 3`) when both sides changed; nothing is written.
+- **restore — canonical guard**: aborts (`exit 5`) if the ref working tree (`claude/`) is not clean, or if the
+  fast-forward would overwrite a local file, **before** any write.
+- **State files** (sync base, `conflicts.log`, lock, backups) must be outside the repository worktree (`exit 2`).
 - **install — additive**: never deletes orphans (that is restore's job); verify post-check with classified outcome.
 
 ## Exit codes
 
-| Code | `capture` | `restore` | `verify` | `install` |
-|---|---|---|---|---|
-| 0 | success | success | 0 drift | success / already up to date |
-| 1 | error | I/O error (backup failed, aborted) | drift detected | I/O error (backup/swap failed, aborted) |
-| 2 | git missing | git missing | unavailable (git/live missing) | prerequisites (bash < 4 / PS < 7) |
-| 3 | modified-both block | modified-live / modified-both block | — | cardinality guard (fail-closed) |
-| 4 | — | `ff-only` diverges | — | — |
-| 5 | — | canonical guard (dirty ref) | — | — |
-| 6 | — | corrupt base (fail-closed) | — | — |
-| 7 | — | post-check drift | — | real DRIFT (clean ref + missing/hash) |
+| Code | `install` | `uninstall` | `verify` | `capture` | `restore` | `scan-fuites` |
+|---|---|---|---|---|---|---|
+| 0 | success / already up to date | success / cancelled | 0 drift | success / nothing to capture | success | report written (with or without hits) |
+| 1 | I/O error, lock held | I/O error, lock held | drift detected | I/O error, lock held | I/O error, lock held | — |
+| 2 | prerequisite or source missing, roots overlap | registry missing or corrupt (without `--discover`) | unavailable | root, git or option error, state inside the worktree | prerequisite, git or option error | root, prerequisite or report path unusable |
+| 3 | third-party or unreadable skill, unsafe path | unsafe path | — | block (modified-both, deleted-live, conflict), unsafe path | block (modified-live, modified-both, conflict), unsafe path | — |
+| 4 | — | — | — | `git add` / `git commit` failed | the reference diverged from its upstream, or the fast-forward failed | — |
+| 5 | `claude/` has uncommitted changes (without `--allow-dirty`) | — | — | first run with a divergent tree (without `--adopt`) | reference not clean, or the fast-forward would overwrite a local file | — |
+| 6 | — | — | — | corrupt sync base (fail-closed) | corrupt sync base (fail-closed) | — |
+| 7 | real drift after deployment | — | — | post-check failed (committed paths not in HEAD or still dirty) | post-check drift | — |
 
 ## Common options
 
-`--dry-run` (0 writes) · `--ref-root` / `--live-root` · `restore --force-restore` ·
-`capture --lww` (Last-Write-Wins, logged to `conflicts.log`) · `install --force` / `--no-backup`.
-PowerShell uses the same names in PascalCase (`-DryRun`, `-ForceRestore`, `-Lww`, …).
+`--dry-run` (0 writes) · `--live <path>` · `--ref <repository>` · `restore --force-restore` ·
+`capture --lww [--provenance ref|live]` (logged to `conflicts.log`; the reference wins by default) ·
+`capture --adopt` · `--manifest-path` · `install --force` / `--no-backup` / `--allow-dirty` ·
+`scan-fuites --motifs-path` / `--report-path`.
 
 See `KNOWN-ISSUES.md` for remaining limitations and documented parity gaps.

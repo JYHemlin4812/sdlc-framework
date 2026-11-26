@@ -13,7 +13,7 @@ description: |
 
 # sdlc-lang-dispatcher — per-language routing
 
-Shipped in the SDLC bundle (installable via `scripts/install.ps1` or `scripts/install.sh`).
+Shipped in the SDLC bundle (installable via `python installer/install.py install`).
 This sub-skill holds the **per-language standards** for SDLC. When the main skill runs a
 P###, it uses this sub-skill to:
 

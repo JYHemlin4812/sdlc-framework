@@ -13,7 +13,7 @@ description: |
 
 # sdlc-asvs-auditor — OWASP ASVS audit
 
-Part of the SDLC bundle (installable via `scripts/install.ps1` or `scripts/install.sh`).
+Part of the SDLC bundle (installable via `python installer/install.py install`).
 Runs a **configurable** security scan based on the OWASP Application Security
 Verification Standard (ASVS) checklists. Three cumulative levels (L1/L2/L3).
 

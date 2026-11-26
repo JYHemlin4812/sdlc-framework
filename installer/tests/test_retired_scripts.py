@@ -7,12 +7,11 @@ import unittest
 
 from tests.helpers import REPO, which
 
-RETIRED_EXTENSIONS = ('.ps1',)        # E7 commit 2; '.sh' is added when the bash scripts are removed
+RETIRED_EXTENSIONS = ('.ps1', '.sh')  # E7 commit 2 (PowerShell), commit 3 (bash)
 NAMES = ('install', 'uninstall', 'verify', 'capture', 'restore', 'scan-fuites', 'sync-lib', 'test-install',
          'test-uninstall', 'test-verify', 'test-capture', 'test-restore', 'test-sync-lib', 'sync-bdd.tests',
          'planchers.assert', 'test-retrait-nestor', 'test-retrait-nestor-codex', 'test-retrait-nestor-ps')
-HISTORICAL = ('CHANGELOG.md', 'docs/KNOWN-ISSUES.md', 'bundle/docs/KNOWN-ISSUES.md', 'installer/',
-              'bundle/scripts/')     # the deprecated bash ports name their former .ps1 reference; removed in E7 commit 3
+HISTORICAL = ('CHANGELOG.md', 'docs/KNOWN-ISSUES.md', 'bundle/docs/KNOWN-ISSUES.md', 'installer/')
 HISTORICAL_LINES = (('claude/skills/sdlc/SKILL.md', '- **3.1**'),)      # version history line only
 
 
@@ -41,10 +40,12 @@ class Pattern(unittest.TestCase):
         rx = re.compile(pattern(), re.IGNORECASE)
         for text in ('run bundle/scripts/install.ps1 now', '`verify.ps1`', 'bundle/scripts/*.ps1',
                      'bundle/scripts/**/*.ps1', 'bundle/scripts/tests/*.ps1', 'bundle/scripts/test-*.ps1',
-                     'Install.PS1', 'sync-bdd.tests.ps1'):
+                     'Install.PS1', 'sync-bdd.tests.ps1', 'bash bundle/scripts/install.sh', 'test-retrait-nestor.sh',
+                     'bundle/scripts/tests/*.sh'):
             with self.subTest(text=text):
                 self.assertIsNotNone(rx.search(text))
-        for text in ('check_sdlc.ps1', 'deploy_init.ps1', 'reinstall.ps1x', 'my-install.ps1'):
+        for text in ('check_sdlc.ps1', 'deploy_init.ps1', 'deploy_init.sh', 'find-polluter.sh', 'reinstall.ps1x',
+                     'my-install.ps1', 'my-install.sh'):
             with self.subTest(text=text):
                 self.assertIsNone(rx.search(text))
 

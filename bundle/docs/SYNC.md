@@ -3,9 +3,9 @@
 **Bidirectional** synchronization between the live install (`~/.claude/`) and the versioned
 canonical tree (`sdlc-framework/claude/` at git `HEAD`), with safeguards against data loss.
 One implementation for every platform: `python installer/install.py <command>` (Python 3.9+,
-standard library only). The former PowerShell scripts are removed; the bash scripts in
-`bundle/scripts/` are deprecated and will be removed in the next release; their documented differences from the
-Python installer are listed in `installer/parite.md`.
+standard library only). The former PowerShell and bash scripts of
+`bundle/scripts/` are removed; their documented differences from the Python installer are listed in
+`installer/parite.md`.
 
 ## Synced domains
 

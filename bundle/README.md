@@ -72,8 +72,6 @@ bundle/
 ├── docs/
 │   ├── SYNC.md           ← bidirectional sync between ~/.claude and the repo
 │   └── KNOWN-ISSUES.md   ← known limitations of the sync scripts
-├── scripts/              ← former bash scripts (deprecated: use installer/install.py)
-│   └── tests/            ← self-contained script tests (.sh)
 └── templates/            ← SDLC_PM/ project templates
 ```
 

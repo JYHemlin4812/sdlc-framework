@@ -60,7 +60,7 @@ déployés et la version. Redémarrez Claude Code, puis lancez `/sdlc:init` dans
 
 Options utiles : `--dry-run` (simulation, aucune écriture), `--force` (réinstalle même si à jour),
 `--no-backup` (pas de sauvegarde des fichiers du bundle avant remplacement). Les anciens scripts
-PowerShell sont retirés ; les scripts bash de `bundle/scripts/` sont dépréciés et seront retirés à la prochaine version.
+PowerShell et bash de `bundle/scripts/` sont retirés.
 
 ## Déroulé type
 
@@ -79,7 +79,8 @@ check_sdlc.py --phase plan → porte de planification, exit 0 requis avant /sdlc
 ```
 sdlc-framework/
 ├── claude/           # Contenu canonique déployé par l'installeur (skills, commands/sdlc, agents)
-├── bundle/           # Scripts d'installation/désinstallation/vérification/synchronisation et leurs tests, modèles, doc d'installation
+├── installer/        # Installeur Python (install, verify, uninstall, capture, restore, scan-fuites) et ses tests
+├── bundle/           # Modèles SDLC_PM, documentation d'installation et de synchro, guides de migration
 ├── docs/             # Interopérabilité, problèmes connus, notes historiques
 ├── AGENTS.md         # Instructions pour agents IA + inventaire détaillé du bundle
 ├── CONTRIBUTING.md   # Workflow de contribution, conventions, validation avant PR

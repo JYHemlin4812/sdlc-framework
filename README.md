@@ -58,8 +58,8 @@ deployed and the version. Restart Claude Code, then run `/sdlc:init` in your pro
 `/sdlc:status` to check the install).
 
 Useful options: `--dry-run` (simulation, no writes), `--force` (reinstall even if up to date),
-`--no-backup` (no backup of bundle files before replacing). The former PowerShell scripts
-are removed; the bash scripts in `bundle/scripts/` are deprecated and will be removed in the next release.
+`--no-backup` (no backup of bundle files before replacing). The former PowerShell and
+bash scripts of `bundle/scripts/` are removed.
 
 ## Typical workflow
 
@@ -78,7 +78,8 @@ check_sdlc.py --phase plan → planning gate, exit 0 required before /sdlc:dev
 ```
 sdlc-framework/
 ├── claude/           # Canonical content deployed by the installer (skills, commands/sdlc, agents)
-├── bundle/           # Install/uninstall/verify/sync scripts and their tests, templates, install docs
+├── installer/        # Python installer (install, verify, uninstall, capture, restore, scan-fuites) and its tests
+├── bundle/           # SDLC_PM templates, install and sync docs, migration guides
 ├── docs/             # Interop, known issues, historical notes
 ├── AGENTS.md         # Instructions for AI agents + detailed bundle inventory
 ├── CONTRIBUTING.md   # Contribution workflow, conventions, validation before a PR

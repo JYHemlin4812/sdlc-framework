@@ -18,8 +18,7 @@ Linux). Tested on Windows and Linux (WSL Ubuntu); macOS is not verified yet.
 git is only needed for the post-install check (`verify`) and for `capture` / `restore`;
 the install itself works from an extracted archive too.
 
-The former PowerShell scripts are removed. The bash scripts in `bundle/scripts/` are deprecated
-and will be removed in the next release; use the Python installer.
+The former PowerShell and bash scripts of `bundle/scripts/` are removed; use the Python installer.
 
 ---
 

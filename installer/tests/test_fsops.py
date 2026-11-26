@@ -57,6 +57,13 @@ class SafeReplace(TempDirCase):
         self.assertTrue(os.path.isdir(d))
         self.assertEqual(os.listdir(d), [])
 
+    def test_ancestor_that_is_a_file_propagates(self):
+        # R1 (test-sync-lib.sh): the parent folder cannot be created because an ancestor is a regular file.
+        blocker = self.write('blocker', b'x')
+        with self.assertRaises(OSError):
+            fsops.safe_replace(os.path.join(blocker, 'sub', 'f.txt'), b'data')
+        self.assertEqual(fsops.read_bytes(blocker), b'x')
+
     def test_mode_preserved(self):
         p = self.write('f.sh', b'#!/bin/sh\n')
         os.chmod(p, 0o644 if os.name == 'nt' else 0o750)

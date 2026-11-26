@@ -7,7 +7,9 @@ import os
 import stat
 import subprocess
 import unittest
+from unittest import mock
 
+from sdlc_installer import capture as capture_mod
 from sdlc_installer import inventory, manifests
 from tests.helpers import make_junction
 from tests.test_install import InstallCase, get, git, has, put, run_cli, snapshot
@@ -199,6 +201,7 @@ class Parity(SyncCase):
         self.assertTrue(os.path.isfile(k.conflict))
         self.assertIn('winner=live', get(k.state, 'conflicts.log').decode('utf-8'))
         self.assertEqual(get(k.ref, A), b'alpha-LIVE\n')
+        self.assertEqual([f for _d, _s, fs in os.walk(k.repo) for f in fs if f == 'conflicts.log'], [])
         self.assertEqual(commits(k.repo), n + 1)
         [folder] = [d for d in os.listdir(os.path.join(k.live, '_backups')) if d.startswith('capture-lww-')]
         self.assertEqual(get(os.path.join(k.live, '_backups', folder), A), b'alpha-REF\n')
@@ -231,6 +234,15 @@ class Parity(SyncCase):
         self.assertIn('base refreshed', out)
         self.assertEqual(commits(k.repo), n)
         self.assertEqual(self.base(k).entries[B], file_hash(k.ref, B))
+
+    def test_g1_capture_writes_through_safe_replace(self):
+        k = self.sync_case('g1', seed=True)
+        put(k.live, B, b'beta-captured\n')
+        with mock.patch.object(capture_mod, 'safe_replace', wraps=capture_mod.safe_replace) as spy:
+            code, out = self.capture(k)
+        self.assertEqual(code, 0, out)
+        self.assertGreaterEqual(spy.call_count, 1)
+        self.assertEqual(get(k.ref, B), b'beta-captured\n')
 
 
 class Contract(SyncCase):
@@ -291,6 +303,18 @@ class Contract(SyncCase):
         k = self.sync_case('subref', seed=True)
         code, out = run_cli(['capture', '--ref', k.ref, '--live', k.live, '--manifest-path', k.manifest])
         self.assertEqual(code, 2, out)
+
+    def test_missing_ref_gives_2_and_leaves_live_untouched(self):
+        # E0 (test-capture.sh): a reference that does not exist gives 2, nothing is written in live.
+        # Like the script: no seeded base, no --manifest-path, a pre-filled live.
+        k = self.sync_case('e0')
+        before = snapshot(k.live)
+        self.assertTrue(before)
+        code, out = run_cli(['capture', '--ref', os.path.join(k.repo, 'missing'), '--live', k.live])
+        self.assertEqual(code, 2, out)
+        self.assertEqual(snapshot(k.live), before)
+        for root, _dirs, names in os.walk(os.path.join(self.tmp, 'e0')):
+            self.assertNotIn('.sync-manifest.json', names, root)
 
     def test_lock_held_gives_1(self):
         k = self.sync_case('lock', seed=True)

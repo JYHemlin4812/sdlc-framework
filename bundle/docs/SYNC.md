@@ -70,7 +70,7 @@ Each file is classified by comparing ref, live and the base (last synced hash):
 |---|---|---|---|---|---|---|
 | 0 | success / already up to date | success / cancelled | 0 drift | success / nothing to capture | success | report written (with or without hits) |
 | 1 | I/O error, lock held | I/O error, lock held | drift detected | I/O error, lock held | I/O error, lock held | — |
-| 2 | prerequisite or source missing, roots overlap | registry missing or corrupt (without `--discover`) | unavailable | root, git or option error, state inside the worktree | prerequisite, git or option error | root, prerequisite or report path unusable |
+| 2 | prerequisite or source missing, roots overlap | registry missing or corrupt (without `--discover`) | unavailable (no domain file in HEAD included) | root, git or option error, state inside the worktree | prerequisite, git or option error | root, prerequisite or report path unusable |
 | 3 | third-party or unreadable skill, unsafe path | unsafe path | — | block (modified-both, deleted-live, conflict), unsafe path | block (modified-live, modified-both, conflict), unsafe path | — |
 | 4 | — | — | — | `git add` / `git commit` failed | the reference diverged from its upstream, or the fast-forward failed | — |
 | 5 | `claude/` has uncommitted changes (without `--allow-dirty`) | — | — | first run with a divergent tree (without `--adopt`) | reference not clean, or the fast-forward would overwrite a local file | — |

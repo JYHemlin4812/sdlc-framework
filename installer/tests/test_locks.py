@@ -1,4 +1,5 @@
 import os
+from unittest import mock
 
 from sdlc_installer import locks
 from sdlc_installer.errors import LockHeld
@@ -22,6 +23,14 @@ class SharedLock(TempDirCase):
         with self.assertRaises(LockHeld):
             locks.live_lock(self.tmp).acquire()
         self.assertTrue(os.path.isdir(os.path.join(self.tmp, '.sync.lock')))
+
+    def test_metadata_write_failure_propagates_and_leaves_no_lock(self):
+        with mock.patch.object(locks.os, 'write', side_effect=OSError('disk full')):
+            with self.assertRaises(OSError):
+                locks.live_lock(self.tmp).acquire()
+        self.assertFalse(os.path.lexists(os.path.join(self.tmp, '.sync.lock')))
+        with locks.live_lock(self.tmp):          # not left held
+            pass
 
     def test_same_file_as_scripts(self):
         self.assertEqual(locks.LOCK_NAME, '.sync.lock')

@@ -6,7 +6,6 @@ import unittest
 
 INSTALLER = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 REPO = os.path.dirname(INSTALLER)
-SCRIPTS = os.path.join(REPO, 'bundle', 'scripts')
 
 
 class TempDirCase(unittest.TestCase):

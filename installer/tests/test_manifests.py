@@ -61,6 +61,27 @@ class RealInstalls(unittest.TestCase):
         self.assertTrue(manifests.aggregate_matches(reg.checksum, src))
 
 
+class Hash(unittest.TestCase):
+    def test_sha256_hex_is_64_hex_stable_and_byte_exact(self):
+        digest = manifests.sha256_hex(b'iso')
+        self.assertRegex(digest, r'^[0-9a-f]{64}$')
+        self.assertEqual(manifests.sha256_hex(b'iso'), digest)
+        self.assertNotEqual(manifests.sha256_hex(b'\x01\x02\x03\x04\x05'), manifests.sha256_hex(b'\x01\x02\x03\x04\x06'))
+        # No newline normalisation: CRLF and LF hash differently.
+        self.assertNotEqual(manifests.sha256_hex(b'a\r\nb'), manifests.sha256_hex(b'a\nb'))
+        self.assertEqual(manifests.sha256_hex(b'abc'),
+                         'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad')
+
+
+class HashOfFile(TempDirCase):
+    def test_file_sha256_is_64_hex_stable_and_matches_the_bytes(self):
+        path = self.write('f.bin', b'a\r\nb')
+        digest = manifests.file_sha256(path)
+        self.assertRegex(digest, r'^[0-9a-f]{64}$')
+        self.assertEqual(manifests.file_sha256(path), digest)
+        self.assertEqual(digest, manifests.sha256_hex(b'a\r\nb'))
+
+
 class Matches(unittest.TestCase):
     def reg(self, hashes, checksum):
         return manifests.InstallRegistry('1', ['sdlc'], False, checksum, hashes, None, {}, [])
@@ -493,6 +514,13 @@ class SyncManifest(TempDirCase):
         self.put(b'{"entries": null}')
         m = manifests.read_sync_manifest(self.path())
         self.assertTrue(m.ok)
+        self.assertEqual(m.entries, {})
+
+    def test_empty_entries_object_is_valid_and_not_fail_closed(self):
+        self.put(b'{"version": "SP2", "entries": {}}')
+        m = manifests.read_sync_manifest(self.path())
+        self.assertTrue(m.ok)
+        self.assertFalse(m.fail_closed)
         self.assertEqual(m.entries, {})
 
     def test_round_trip_and_atomic(self):

@@ -108,8 +108,8 @@ class Uninstall(InstallCase):
         code, out = self.uninstall(live, '--discover', '--force', '--remove-core', ref=repo)
         self.assertEqual(code, 0, out)
         self.assertEqual(get(live, 'CLAUDE.md'), claude_md)
-        self.assertTrue(has(live, 'NESTOR.md'))
-        self.assertTrue(has(live, 'agents/nestor-b.md'))
+        self.assertEqual(get(live, 'NESTOR.md'), b'core\n')          # T4 (Codex .sh): bytes intact
+        self.assertEqual(get(live, 'agents/nestor-b.md'), b'other\n')
         self.assertFalse(has(live, 'agents/sdlc-architect.md'))
         self.assertFalse(has(live, 'agents/nested/sdlc-deep.md'))
 

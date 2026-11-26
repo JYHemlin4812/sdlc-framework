@@ -1,12 +1,14 @@
-"""Design §6 (PYI-05): the current .sh and .ps1 scripts return the documented code for the same condition.
-Baseline for the Python port. Each shell is checked on its own (a missing shell skips only its half).
+"""Design §6 (PYI-05): the .sh and .ps1 scripts return the documented code for the same condition.
+Baseline for the Python port, kept after E7 on the scripts of legacy_fixtures.SCRIPTS_COMMIT (removed from the tree).
+Each shell is checked on its own (a missing shell or commit skips only what it needs).
 Temporary roots only; ~/.claude is never touched."""
 import os
 import shutil
 import subprocess
 import unittest
 
-from tests.helpers import SCRIPTS, TempDirCase, which
+from tests.helpers import TempDirCase, which
+from tests.legacy_fixtures import SCRIPTS_COMMIT, pinned_scripts
 
 BASH = which('bash')
 PWSH = which('pwsh')
@@ -15,11 +17,12 @@ SHELLS = [s for s in (('sh', BASH), ('ps1', PWSH)) if s[1]]
 
 def run(shell, name, args):
     kind, exe = shell
+    scripts = pinned_scripts()
     if kind == 'sh':
         # Native paths on purpose (E1-R3-07): bash must handle Windows backslash paths too.
-        cmd = [exe, os.path.join(SCRIPTS, name + '.sh')] + args['sh']
+        cmd = [exe, os.path.join(scripts, name + '.sh')] + args['sh']
     else:
-        cmd = [exe, '-NoProfile', '-File', os.path.join(SCRIPTS, name + '.ps1')] + args['ps1']
+        cmd = [exe, '-NoProfile', '-File', os.path.join(scripts, name + '.ps1')] + args['ps1']
     return subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL,
                           timeout=300).returncode
 
@@ -45,6 +48,8 @@ FILES = {'skills/sdlc/SKILL.md': b'---\nname: sdlc\n---\n', 'commands/sdlc/dev.m
 @unittest.skipUnless(SHELLS, 'neither bash nor pwsh is available')
 class ExitCodeParity(TempDirCase):
     def setUp(self):
+        if pinned_scripts() is None:
+            self.skipTest('commit %s missing: script parity NOT proven' % SCRIPTS_COMMIT)
         super().setUp()
         self.repo = os.path.join(self.tmp, 'repo')
         self.ref = os.path.join(self.repo, 'claude')

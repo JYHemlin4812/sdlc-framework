@@ -5,7 +5,8 @@ Read-only: no file, no lock, no index refresh (git --no-optional-locks). Port of
 - live = domain files on disk (third-party skills ignored, sync exclusions never counted);
 - MISSING, HASH DIFF, EXTRA and FLOOR (cardinalities derived from HEAD, never literals).
 Comparison by Git blob id: the live bytes are hashed the way Git hashes a blob, so no blob is read.
-Codes: 0 identical, 1 at least one difference, 2 unavailable (live missing, git or HEAD missing, unreadable).
+Codes: 0 identical, 1 at least one difference, 2 unavailable (live missing, git or HEAD missing, unreadable,
+no domain file in HEAD).
 """
 import collections
 import os
@@ -55,6 +56,9 @@ def verify(ref_repo, live_root, subdir='claude'):
         if not gitstate.has_tree(ref_repo, subdir):
             return _unavailable('HEAD of %s has no %s/ folder' % (ref_repo, subdir))
         ref = inventory.head_blob_ids(ref_repo, subdir)
+        if not ref:
+            # N2: an empty reference would make any empty live "identical" (vacuous 0 of the scripts).
+            return _unavailable('HEAD of %s has no file of the SDLC domain under %s/' % (ref_repo, subdir))
         algo = object_format(ref_repo)
         live = {}
         for rel in domain.domain_rels(live_root, allow_root_link=True):

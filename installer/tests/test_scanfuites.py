@@ -9,7 +9,8 @@ import unittest
 from unittest import mock
 
 from sdlc_installer import scanfuites
-from tests.helpers import INSTALLER, SCRIPTS, TempDirCase, which
+from tests.helpers import INSTALLER, TempDirCase, which
+from tests.legacy_fixtures import SCRIPTS_COMMIT, pinned_scripts
 from tests.test_install import get, git, put, run_cli, snapshot
 
 AT = '@'
@@ -402,7 +403,13 @@ class Contract(ScanCase):
         self.assertIn('**Generic mode only**', get(self.base, 'm.md').decode('utf-8'))
 
 class ScriptParity(ScanCase):
-    """The same fixture through each available script gives the same report, compared as bytes."""
+    """The same fixture through each available script gives the same report, compared as bytes. The scripts are
+    those of legacy_fixtures.SCRIPTS_COMMIT (removed from the tree in E7)."""
+
+    def setUp(self):
+        if pinned_scripts() is None:
+            self.skipTest('commit %s missing: script parity NOT proven' % SCRIPTS_COMMIT)
+        super().setUp()
 
     def run_both(self, cmd, name):
         repo, motifs = self.repo(), self.motifs()
@@ -420,7 +427,7 @@ class ScriptParity(ScanCase):
     @unittest.skipUnless(ps_exe(), 'PowerShell not available')
     def test_ps1(self):
         _repo, got, want = self.run_both(
-            lambda repo, motifs, report: [ps_exe(), '-NoProfile', '-File', os.path.join(SCRIPTS, 'scan-fuites.ps1'),
+            lambda repo, motifs, report: [ps_exe(), '-NoProfile', '-File', os.path.join(pinned_scripts(), 'scan-fuites.ps1'),
                                           '-RepoRoot', repo, '-MotifsPath', motifs, '-ReportPath', report], 'ps1.md')
         self.assertEqual(got, want)                       # byte for byte, headers and final blank line included
 
@@ -430,7 +437,7 @@ class ScriptParity(ScanCase):
         files with a binary extension, so img/logo.png is listed and counted. It writes LF everywhere and, on Windows,
         prints the root with forward slashes."""
         repo, got, want = self.run_both(
-            lambda repo, motifs, report: [which('bash'), os.path.join(SCRIPTS, 'scan-fuites.sh'), '--repo-root', repo,
+            lambda repo, motifs, report: [which('bash'), os.path.join(pinned_scripts(), 'scan-fuites.sh'), '--repo-root', repo,
                                           '--motifs-path', motifs, '--report-path', report], 'sh.md')
         want = want.decode('utf-8')
         logo = '- `img/logo.png:1:generic-email`\n'

@@ -148,6 +148,7 @@ class Overlay(TempDirCase):
         self.write('CLAUDE.md', text)
         res = overlay.set_local_overlay_import(self.tmp)
         self.assertEqual(len(res.warnings), 1)
+        self.assertIn(MARK, res.warnings[0])
         self.assertEqual(self.read(self.md()), text)
 
     def test_backup_holds_the_original_bytes(self):

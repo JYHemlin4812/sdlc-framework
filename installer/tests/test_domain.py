@@ -19,6 +19,11 @@ class DomainRules(unittest.TestCase):
         for rel in no:
             self.assertFalse(domain.in_domain(rel), rel)
 
+    def test_sync_state_files_are_excluded(self):
+        for rel in ('commands/sdlc/conflicts.log', '.sync-manifest.json'):
+            self.assertTrue(domain.is_excluded(rel), rel)
+            self.assertFalse(domain.in_domain(rel), rel)
+
     def test_skill_names(self):
         for ok in ('sdlc', 'sdlc-verify', 'sdlc-wave-orchestrator'):
             self.assertTrue(domain.is_valid_skill_name(ok), ok)

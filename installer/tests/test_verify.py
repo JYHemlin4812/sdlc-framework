@@ -2,9 +2,9 @@
 import os
 import re
 
-from sdlc_installer import domain
+from sdlc_installer import domain, inventory
 from sdlc_installer import verify as verify_mod
-from tests.helpers import INSTALLER, TempDirCase
+from tests.helpers import INSTALLER, REPO, TempDirCase
 from tests.test_install import git, put, run_cli, snapshot
 
 DOMAIN = {
@@ -84,6 +84,25 @@ class Verify(TempDirCase):
         self.assertEqual(code, 1)
         self.assertIn('[EXTRA]', out)
 
+    def test_s9a_cli_prints_hash_diff_marker(self):
+        put(self.live, 'commands/sdlc/plan.md', b'REWRITTEN\n')
+        code, out = run_cli(['verify', '--ref', self.ref, '--live', self.live])
+        self.assertEqual(code, 1)
+        self.assertIn('[HASH DIFF]', out)
+        self.assertNotIn('[MISSING]', out)
+
+    def test_s9b_cli_prints_missing_marker_alone(self):
+        # S9b (sync-bdd.tests.ps1): from an identical live, one deleted file is the only difference.
+        os.remove(os.path.join(self.live, 'agents', 'sdlc-js.md'))
+        code, out = run_cli(['verify', '--ref', self.ref, '--live', self.live])
+        self.assertEqual(code, 1)
+        self.assertIn('[MISSING]', out)
+        self.assertNotIn('[HASH DIFF]', out)
+
+    def test_p4_real_head_inventory_cardinalities(self):
+        # (skills, agents, commands) read from HEAD, not from the working tree.
+        self.assertEqual(verify_mod.cardinalities(inventory.head_inventory(REPO)), (14, 12, 19))
+
     def test_t7_third_party_ignored(self):
         put(self.live, 'skills/my-personal-skill/SKILL.md', b'third-party\n')
         put(self.live, 'agents/other-agent.md', b'third-party agent\n')
@@ -104,6 +123,24 @@ class Verify(TempDirCase):
         os.makedirs(empty)
         git(empty, 'init', '-q')
         self.assertEqual(verify_mod.verify(empty, self.live).code, 2)
+
+    def test_n2_reference_without_domain_files_gives_2(self):
+        # N2 (sync-bdd.tests.ps1): the scripts gave a vacuous 0; decision JYH 2026-11-26: unavailable (2).
+        bare = os.path.join(self.tmp, 'bare-ref')
+        put(os.path.join(bare, 'claude'), 'README.md', b'outside the domain\n')
+        git(bare, 'init', '-q')
+        for k, v in (('user.email', 't@t'), ('user.name', 't'), ('commit.gpgsign', 'false')):
+            git(bare, 'config', k, v)
+        git(bare, 'add', '-A')
+        git(bare, 'commit', '-q', '-m', 'no domain')
+        empty_live = os.path.join(self.tmp, 'empty-live')
+        os.makedirs(empty_live)
+        res = verify_mod.verify(bare, empty_live)
+        self.assertEqual(res.code, 2)
+        self.assertIn('no file of the SDLC domain', res.reason)
+        code, out = run_cli(['verify', '--ref', bare, '--live', empty_live])
+        self.assertEqual(code, 2)
+        self.assertIn('verify unavailable', out)
 
     def test_e3_r2_05_same_or_nested_roots_give_2(self):
         for live in (os.path.join(self.ref, 'claude'), os.path.join(self.ref, 'claude', 'skills'), self.ref):

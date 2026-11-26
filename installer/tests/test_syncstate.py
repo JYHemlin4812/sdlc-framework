@@ -42,10 +42,13 @@ class FirstRun(unittest.TestCase):
     def test_seed_block_adopt(self):
         same = {'a': '1', 'b': '2'}
         self.assertEqual(s.first_run_plan(same, dict(same)).signal, 'seed')
-        asym = s.first_run_plan({'a': '1'}, {'a': '1', 'x': '9'})
-        self.assertEqual((asym.signal, asym.mismatches), ('block', ['x']))
-        adopted = s.first_run_plan({'a': '1'}, {'a': '1', 'x': '9'}, adopt=True)
-        self.assertEqual((adopted.signal, adopted.adopted), ('seed', True))
+        # Presence asymmetry in both directions (test-sync-lib.sh: b only in the reference; x only in live).
+        for ref, live, key in (({'a': '1', 'b': '2'}, {'a': '1'}, 'b'), ({'a': '1'}, {'a': '1', 'x': '9'}, 'x')):
+            with self.subTest(key=key):
+                asym = s.first_run_plan(ref, live)
+                self.assertEqual((asym.signal, asym.mismatches), ('block', [key]))
+                adopted = s.first_run_plan(ref, live, adopt=True)
+                self.assertEqual((adopted.signal, adopted.adopted), ('seed', True))
         self.assertEqual(s.first_run_plan({'a': '1'}, {'a': '2'}).signal, 'block')
 
     def test_seed_prefers_the_reference(self):

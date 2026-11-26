@@ -4,10 +4,13 @@ Temporary roots only; ~/.claude is never touched (every call passes --live)."""
 import json
 import os
 import shutil
+import subprocess
 import unittest
+from unittest import mock
 
 from sdlc_installer import manifests
-from tests.test_capture import A, B, SyncCase, file_hash
+from sdlc_installer import restore as restore_mod
+from tests.test_capture import A, B, COMMON, SyncCase, file_hash
 from tests.test_install import SEED, get, git, has, put, run_cli, snapshot
 
 
@@ -128,6 +131,54 @@ class Parity(RestoreCase):
         self.assertEqual(code, 0, out)
         self.assertEqual(git(k.repo, 'rev-parse', 'HEAD'), head)
 
+    def test_g1_restore_writes_through_safe_replace(self):
+        k = self.sync_case('g1', seed=True)
+        put(k.ref, B, b'beta-v2\n')
+        commit_all(k.repo, 'ref: modify beta')
+        with mock.patch.object(restore_mod, 'safe_replace', wraps=restore_mod.safe_replace) as spy:
+            code, out = self.restore(k)
+        self.assertEqual(code, 0, out)
+        self.assertGreaterEqual(spy.call_count, 1)
+        self.assertEqual(get(k.live, B), b'beta-v2\n')
+
+    def test_n1_files_outside_the_domain_survive_a_restore_byte_for_byte(self):
+        k = self.sync_case('n1', seed=True)
+        outside = {'settings.local.json': b'{"secret": 1}\r\n', 'skills/other-tool/SKILL.md': b'third party\x00\xff\n'}
+        for rel, data in outside.items():
+            put(k.live, rel, data)
+        put(k.ref, B, b'beta-v2\n')
+        commit_all(k.repo, 'ref: modify beta')
+        code, out = self.restore(k)
+        self.assertEqual(code, 0, out)
+        self.assertEqual(get(k.live, B), b'beta-v2\n')                       # the restore did run
+        for rel, data in outside.items():
+            self.assertEqual(get(k.live, rel), data, rel)
+
+    def test_s8_crlf_script_survives_capture_then_restore_byte_for_byte(self):
+        hook_rel = 'skills/sdlc/scripts/hook.ps1'
+        crlf = b'hook-v1\r\nline2\r\n'
+        # Like sync-bdd.tests.ps1: the .ps1 exists (LF content) in reference, live and base before the base is
+        # seeded, then only the live copy is rewritten with CRLF (a modification, not an addition).
+        k = self.sync_case('s8', files=dict(COMMON, **{hook_rel: b'base\n'}), seed=True)
+        self.assertEqual(get(k.ref, hook_rel), b'base\n')
+        self.assertEqual(get(k.live, hook_rel), b'base\n')
+        self.assertIn(hook_rel, self.base(k).entries)
+        put(k.live, hook_rel, crlf)
+        code, out = self.capture(k)
+        self.assertEqual(code, 0, out)
+        self.assertEqual(get(k.ref, hook_rel), crlf)                          # reference bytes keep the CRLF
+        leftovers = [f for _d, _s, fs in os.walk(k.ref) for f in fs if f.startswith('.sdlc-tmp-')]
+        self.assertEqual(leftovers, [])                                       # S8/N4: no temporary on the ref side
+        blob = subprocess.run(['git', '-C', k.repo, 'cat-file', 'blob', 'HEAD:claude/' + hook_rel],
+                              check=True, stdout=subprocess.PIPE).stdout
+        self.assertEqual(blob, crlf)                                          # so does the committed blob
+        origin = file_hash(k.live, hook_rel)
+        os.remove(os.path.join(k.live, *hook_rel.split('/')))
+        code, out = self.restore(k)
+        self.assertEqual(code, 0, out)
+        self.assertEqual(get(k.live, hook_rel), crlf)
+        self.assertEqual(file_hash(k.live, hook_rel), origin)
+
     def test_d1_corrupt_base_fails_closed(self):
         k = self.sync_case('d1')
         put(k.state, '.sync-manifest.json', b'{ this is : not json')
@@ -173,10 +224,15 @@ class Contract(RestoreCase):
 
     def test_absent_base_is_empty(self):
         k = self.sync_case('nobase')
+        live_only = 'agents/sdlc-live-only.md'
+        put(k.live, live_only, b'live-only\n')                      # domain file present in live only
         put(k.ref, 'agents/sdlc-gamma.md', b'gamma\n')
         commit_all(k.repo, 'add gamma')
         code, out = self.restore(k)
-        self.assertEqual(code, 0, out)
+        # A live file is never read as an implicit base: it keeps its bytes and the post-check reports it EXTRA (7).
+        self.assertEqual(code, 7, out)
+        self.assertIn('EXTRA', out)
+        self.assertEqual(get(k.live, live_only), b'live-only\n')
         self.assertEqual(get(k.live, 'agents/sdlc-gamma.md'), b'gamma\n')
         self.assertFalse(os.path.exists(k.manifest))                # restore never writes the base
 

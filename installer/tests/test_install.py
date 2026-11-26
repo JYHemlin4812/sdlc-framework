@@ -137,7 +137,8 @@ class Parity(InstallCase):
         _repo, ref, live = self.new_case('c3', use_git=False)
         code, out = self.install(ref, live)
         self.assertEqual(code, 0, out)
-        self.assertTrue(has(live, 'agents/nested/sdlc-deep.md'))
+        self.assertEqual(get(live, 'skills/sdlc/SKILL.md'), SEED['skills/sdlc/SKILL.md'])
+        self.assertEqual(get(live, 'agents/nested/sdlc-deep.md'), SEED['agents/nested/sdlc-deep.md'])
         self.assertIn('unavailable', out)
         self.assertNotIn('source_commit', self.registry(live))
 
@@ -251,8 +252,10 @@ class Parity(InstallCase):
         self.assertEqual(text.count(b'@keep-me.md'), 1)
         self.assertIn(b'mes consignes', text)
         self.assertEqual(text.count(b'@CLAUDE.local.md'), 1)
-        code, _out = self.install(ref, live, '--remove-import')
+        code, out = self.install(ref, live, '--remove-import')
         self.assertEqual(code, 2)
+        self.assertIn('unrecognized arguments', out)
+        self.assertIn('--remove-import', out)
         self.assertEqual(get(live, 'CLAUDE.md'), text)
 
     def test_c15_local_overlay(self):
@@ -322,6 +325,23 @@ class Contract(InstallCase):
             code, out = self.install(ref, live)
         self.assertEqual(code, 7, out)
         self.assertEqual(get(live, REGISTRY), before)
+
+    def test_write_error_on_the_second_file_fails_without_registry_and_frees_the_lock(self):
+        _repo, ref, live = self.new_case('werr')
+        real = install_mod.safe_replace
+        calls = []
+
+        def failing(path, data):
+            calls.append(path)
+            if len(calls) == 2:
+                raise OSError('disk full')
+            return real(path, data)
+        with mock.patch.object(install_mod, 'safe_replace', failing):
+            code, out = self.install(ref, live)
+        self.assertGreaterEqual(len(calls), 2)
+        self.assertNotEqual(code, 0, out)
+        self.assertFalse(has(live, REGISTRY))
+        self.assertFalse(os.path.lexists(os.path.join(live, '.sync.lock')))
 
     def test_r3_09_reference_changed_before_the_lock(self):
         repo, ref, live = self.new_case('r309')

@@ -4,14 +4,18 @@ build_install(commit, shell) copies bundle/scripts from `commit` (e.g. 667d7ed, 
 aggregate only) into a throw-away repository that holds a small claude/ tree, commits it, and runs the old
 install script against an empty live root.
 """
+import atexit
 import io
 import os
+import shutil
 import subprocess
 import tarfile
+import tempfile
 
 from tests.helpers import REPO, which
 
 OLD_COMMIT = '667d7ed'       # origin/main: install registry without file_hashes
+SCRIPTS_COMMIT = 'c7c437f'   # E6: last commit with every bundle/scripts script (removed in E7)
 BASH = which('bash')
 PWSH = which('pwsh')
 
@@ -36,17 +40,38 @@ def _git(repo, *args):
     subprocess.run(['git', '-C', repo] + list(args), check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
 
-def make_repo(tmp, commit, seed=SEED):
-    """<tmp>/repo with the scripts of `commit` and a committed claude/ tree. Returns the repo path."""
-    repo = os.path.join(tmp, 'repo')
-    os.makedirs(repo)
+def _extract_scripts(commit, dest):
     data = subprocess.run(['git', '-C', REPO, 'archive', commit, 'bundle/scripts'],
                           stdout=subprocess.PIPE, check=True).stdout
     with tarfile.open(fileobj=io.BytesIO(data)) as tar:
         try:
-            tar.extractall(repo, filter='data')
+            tar.extractall(dest, filter='data')
         except TypeError:      # Python < 3.12 without the filter argument
-            tar.extractall(repo)
+            tar.extractall(dest)
+
+
+_pinned = []
+
+
+def pinned_scripts():
+    """bundle/scripts of SCRIPTS_COMMIT extracted once into a temporary folder (removed at exit), or None when
+    the commit is missing (shallow clone, rewritten history): the parity tests then skip visibly."""
+    if not _pinned:
+        path = None
+        if commit_exists(SCRIPTS_COMMIT):
+            tmp = tempfile.mkdtemp(prefix='sdlc-pinned-scripts-')
+            atexit.register(shutil.rmtree, tmp, True)
+            _extract_scripts(SCRIPTS_COMMIT, tmp)
+            path = os.path.join(tmp, 'bundle', 'scripts')
+        _pinned.append(path)
+    return _pinned[0]
+
+
+def make_repo(tmp, commit, seed=SEED):
+    """<tmp>/repo with the scripts of `commit` and a committed claude/ tree. Returns the repo path."""
+    repo = os.path.join(tmp, 'repo')
+    os.makedirs(repo)
+    _extract_scripts(commit, repo)
     for rel, content in seed.items():
         path = os.path.join(repo, 'claude', *rel.split('/'))
         os.makedirs(os.path.dirname(path), exist_ok=True)

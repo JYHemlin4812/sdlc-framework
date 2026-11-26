@@ -15,8 +15,8 @@ Standalone.
 ## Requirements
 
 - [Claude Code](https://claude.com/claude-code) — the framework runs inside it.
-- Python 3.9+ (AQ Gate and wave planner scripts), git, and PowerShell 7 (Windows) or bash 4+
-  (Linux/macOS) for the installer. Details in [`bundle/INSTALL.md`](bundle/INSTALL.md).
+- Python 3.9+ (installer, AQ Gate and wave planner scripts) and git. Details in
+  [`bundle/INSTALL.md`](bundle/INSTALL.md).
 
 ## Languages
 
@@ -58,8 +58,8 @@ deployed and the version. Restart Claude Code, then run `/sdlc:init` in your pro
 `/sdlc:status` to check the install).
 
 Useful options: `--dry-run` (simulation, no writes), `--force` (reinstall even if up to date),
-`--no-backup` (no backup of bundle files before replacing). The former `bundle/scripts/install.ps1`
-and `install.sh` are deprecated and will be removed in the next release.
+`--no-backup` (no backup of bundle files before replacing). The former PowerShell scripts
+are removed; the bash scripts in `bundle/scripts/` are deprecated and will be removed in the next release.
 
 ## Typical workflow
 

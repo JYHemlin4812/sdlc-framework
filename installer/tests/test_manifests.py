@@ -42,18 +42,18 @@ class RealInstalls(unittest.TestCase):
         self.assertEqual(reg.checksum, manifests.aggregate_checksum(src, 'ordinal'))
         self.assertTrue(manifests.aggregate_matches(reg.checksum, src))
 
-    @unittest.skipUnless(lf.BASH, 'needs bash')
+    @unittest.skipUnless(lf.BASH and lf.commit_exists(lf.SCRIPTS_COMMIT), 'needs bash and commit c7c437f')
     def test_current_sh_format_with_file_hashes(self):
-        repo, live, src = self.build('HEAD', 'sh')
+        repo, live, src = self.build(lf.SCRIPTS_COMMIT, 'sh')         # E7: the scripts left the tree
         reg = manifests.read_install_registry(live)
         self.assertEqual(reg.file_hashes, src)
         self.assertEqual(reg.checksum, manifests.aggregate_checksum(src, 'ordinal'))
         self.assertCountEqual(reg.skills, ['sdlc', 'sdlc-verify'])
 
-    @unittest.skipUnless(lf.PWSH, 'needs pwsh')
+    @unittest.skipUnless(lf.PWSH and lf.commit_exists(lf.SCRIPTS_COMMIT), 'needs pwsh and commit c7c437f')
     def test_current_ps_format_sorts_case_insensitively(self):
         """install.ps1 sorts with Sort-Object, install.sh with LC_ALL=C: two aggregates for one tree."""
-        repo, live, src = self.build('HEAD', 'ps')
+        repo, live, src = self.build(lf.SCRIPTS_COMMIT, 'ps')
         reg = manifests.read_install_registry(live)
         self.assertEqual(reg.file_hashes, src)
         self.assertEqual(reg.checksum, manifests.aggregate_checksum(src, 'casefold'))

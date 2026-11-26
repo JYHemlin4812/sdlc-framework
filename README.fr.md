@@ -15,8 +15,7 @@ Autonome.
 ## Prérequis
 
 - [Claude Code](https://claude.com/claude-code) — le framework s'exécute dedans.
-- Python 3.9+ (scripts de l'AQ Gate et du planificateur de vagues), git, et PowerShell 7
-  (Windows) ou bash 4+ (Linux/macOS) pour l'installeur. Détails dans
+- Python 3.9+ (installeur, scripts de l'AQ Gate et du planificateur de vagues) et git. Détails dans
   [`bundle/INSTALL.md`](bundle/INSTALL.md).
 
 ## Langues
@@ -61,7 +60,7 @@ déployés et la version. Redémarrez Claude Code, puis lancez `/sdlc:init` dans
 
 Options utiles : `--dry-run` (simulation, aucune écriture), `--force` (réinstalle même si à jour),
 `--no-backup` (pas de sauvegarde des fichiers du bundle avant remplacement). Les anciens scripts
-`bundle/scripts/install.ps1` et `install.sh` sont dépréciés et seront retirés à la prochaine version.
+PowerShell sont retirés ; les scripts bash de `bundle/scripts/` sont dépréciés et seront retirés à la prochaine version.
 
 ## Déroulé type
 

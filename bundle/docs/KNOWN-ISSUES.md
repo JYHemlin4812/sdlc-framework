@@ -27,6 +27,15 @@ Found by the P018 adversarial review; not fixed because they have no real impact
   `LC_ALL=C` vs PS culture); hyphen `-` vs em dash `—` in the `capture` commit message.
   No functional impact (same exit codes and same sets).
 
+## Python installer: restore trace gap (FINAL-R3-02)
+
+- ⚠️ **`restore` can leave a replaced file without its recorded hash.** If publishing the
+  trace fails (Windows, install registry read-only) or the process is interrupted between
+  the replacement of a file and the recording of its hash, that hash is missing. An
+  `uninstall` without Git history then keeps the file (nothing is deleted wrongly).
+  Workaround: `uninstall --ref <repo>` (proof by history) or reinstall.
+  Planned fix: a journal of replacements.
+
 ## Strict prerequisites (P018 review)
 
 - ⚠️ **bash 4+** is required for the `.sh` port (`declare -A`, `mapfile`). macOS ships

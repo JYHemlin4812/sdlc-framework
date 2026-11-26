@@ -54,6 +54,8 @@ def load_source(root, allow_dirty=False):
     root = os.path.realpath(root)
     worktree = gitstate.worktree_root(root)      # kept for §5.1 even without a commit (E3-R1-02)
     repo = worktree
+    if repo:
+        gitstate.require_local_objects(repo)     # FINAL-R1-04, before the first object read
     commit = gitstate.head_commit(repo) if repo else None
     subdir = gitstate.subdir_of(repo, root) if commit else None
     if commit and not subdir:
@@ -205,6 +207,11 @@ def _counts(files):
 
 def run(opts, write=print):
     """install command. Returns the exit code; InstallerError carries its own code to the caller."""
+    with gitstate.local_objects_only(opts.dry_run):          # FINAL-R1-04: a dry-run never fetches
+        return _run(opts, write)
+
+
+def _run(opts, write):
     out = _Out(write)
     live_arg = opts.live
     source = load_source(opts.source, opts.allow_dirty)

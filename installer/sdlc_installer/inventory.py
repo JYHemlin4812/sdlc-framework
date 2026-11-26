@@ -12,8 +12,12 @@ from .errors import SecurityError, UsageError
 REGULAR_MODES = (b'100644', b'100755')
 
 
+# Extra global options of every git call; gitstate.local_objects_only sets --no-lazy-fetch for a dry-run (FINAL-R1-04).
+GLOBAL_OPTS = []
+
+
 def _git(repo, *args):
-    cmd = ['git', '--no-optional-locks', '-C', repo] + list(args)
+    cmd = ['git', '--no-optional-locks'] + GLOBAL_OPTS + ['-C', repo] + list(args)
     try:
         return subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
     except OSError as exc:

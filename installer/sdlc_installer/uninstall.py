@@ -1,6 +1,7 @@
 """uninstall (design §8.6): remove what the bundle installed, and only that.
 
-- Targets: skills/<s> for each skill of the install registry (or discovered with --discover), commands/sdlc, and with
+- Targets: skills/<s> for each skill of the install registry or of its retained_hashes (or discovered with
+  --discover), commands/sdlc, and with
   --remove-core every agents/**/sdlc-*. Only SDLC-domain files are candidates; CLAUDE.md and anything outside the
   domain are never touched (§1 decision 1, §8.6 point 3).
 - A candidate is deleted only if it is bundle-owned (§3: registry file_hashes or a blob of the reference history);
@@ -14,7 +15,7 @@ import collections
 import os
 import stat
 
-from . import backup, domain, gitstate, locks, manifests, ownership, paths
+from . import backup, domain, fsops, gitstate, locks, manifests, ownership, paths
 from .errors import OK, SecurityError, UsageError
 
 Plan = collections.namedtuple('Plan', 'skills remove keep registry_present legacy_all version prune')
@@ -102,6 +103,11 @@ def _plan(live, ref, discover, remove_core, out):
     if reg is not None:
         skills, version = list(reg.skills), reg.version
         warnings.extend(reg.warnings)
+        if reg.file_hashes is not None:
+            # FINAL-R1-02: a skill an earlier install or restore deployed, omitted by the last source, is still
+            # scanned when retained_hashes proves one of its files (each file is still checked below).
+            kept = set(rel.split('/')[1] for rel in reg.retained if rel.startswith('skills/') and rel.count('/') >= 2)
+            skills += sorted(s for s in kept - set(skills) if domain.is_valid_skill_name(s))
     else:
         out.warn('--discover: heuristic search for sdlc* skills; only files proven by the Git history are removed')
         skills, version = manifests._derive_skills(live, warnings), '(unknown)'
@@ -138,13 +144,8 @@ def _plan(live, ref, discover, remove_core, out):
             remove.append(rel)
         else:
             keep.append(rel)
-    if os.name == 'nt':
-        for rel in remove:
-            st = os.stat(paths.safe_target(live, rel))
-            if not st.st_mode & stat.S_IWRITE and st.st_nlink > 1:
-                # E4-R4-02: making it writable would change the attribute of its other hard links too.
-                raise SecurityError('read-only file with other hard links, refusing to change its attribute: %s '
-                                    '(remove the read-only attribute or the other links first)' % rel)
+    doomed = remove + ([reg_rel] if registry_present else [])
+    fsops.check_removable(dict((rel, paths.safe_target(live, rel)) for rel in doomed))     # registry included
     if reg is not None and hashes is None:
         if legacy_all:
             out.warn('Legacy install (registry has no file_hashes, and no readable Git history): every file in the '

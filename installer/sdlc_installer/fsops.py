@@ -4,7 +4,7 @@ import stat
 import tempfile
 import time
 
-from .errors import InstallerError
+from .errors import InstallerError, SecurityError
 
 
 def _replace(src, dst, attempts=6, delay=0.05):
@@ -44,11 +44,29 @@ def safe_replace(path, data):
         _replace(tmp, path)
     except BaseException:
         try:
+            if os.name == 'nt':
+                os.chmod(tmp, stat.S_IREAD | stat.S_IWRITE)    # FINAL-R1-05: a read-only temp cannot be removed
             os.unlink(tmp)
         except OSError:
             pass
         raise
     return path
+
+
+def check_removable(targets):
+    """Windows (E4-R4-02, FINAL-R1-01): removing a read-only file means making it writable first, which changes the
+    attribute of its other hard links too, so such a file is refused. `targets`: rel -> path, every removal of the
+    run, checked before the first mutation. Absent paths are skipped."""
+    if os.name != 'nt':
+        return
+    for rel, path in targets.items():
+        try:
+            st = os.stat(path)
+        except FileNotFoundError:
+            continue
+        if not st.st_mode & stat.S_IWRITE and st.st_nlink > 1:
+            raise SecurityError('read-only file with other hard links, refusing to change its attribute: %s '
+                                '(remove the read-only attribute or the other links first)' % rel)
 
 
 def read_bytes(path):

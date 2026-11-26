@@ -422,6 +422,21 @@ class Uninstall(InstallCase):
         self.assertEqual(snapshot(live), before)
         self.assertFalse(os.stat(other).st_mode & _stat.S_IWRITE)
 
+    @unittest.skipUnless(os.name == 'nt', 'Windows read-only attribute')
+    def test_final_r1_01_read_only_registry_with_another_hard_link(self):
+        import stat as _stat
+        repo, _ref, live = self.installed('reglink')
+        target = os.path.join(live, *REGISTRY.split('/'))
+        other = os.path.join(self.tmp, 'registry-link.json')
+        os.link(target, other)
+        os.chmod(target, _stat.S_IREAD)
+        self.addCleanup(lambda: os.path.exists(other) and os.chmod(other, _stat.S_IREAD | _stat.S_IWRITE))
+        before = snapshot(live)
+        code, out = self.uninstall(live, '--force', ref=repo)
+        self.assertEqual(code, 3, out)
+        self.assertEqual(snapshot(live), before)
+        self.assertFalse(os.stat(other).st_mode & _stat.S_IWRITE)
+
     def test_e4_r4_03_skip_never_opens_a_selected_root(self):
         from sdlc_installer import domain
         _repo, _ref, live = self.installed('skiproot')

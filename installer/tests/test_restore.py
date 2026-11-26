@@ -4,6 +4,7 @@ Temporary roots only; ~/.claude is never touched (every call passes --live)."""
 import json
 import os
 import shutil
+import stat
 import subprocess
 import unittest
 from unittest import mock
@@ -513,6 +514,120 @@ class Sequence(RestoreCase):
                  if has(os.path.join(backups, d), 'skills/sdlc-verify/SKILL.md')]
         self.assertIn(b'---\nname: sdlc-verify\n---\nedited by hand\n', saved)
 
+    def test_final_r1_02_skill_omitted_by_c_is_uninstalled(self):
+        """install A -> restore B adds a whole skill -> install C (archive) omits it -> uninstall without history:
+        the untouched file proven by retained_hashes is removed, the hand-edited one is kept."""
+        k = self.installed('fr102')
+        put(k.ref, 'skills/sdlc-b/SKILL.md', b'---\nname: sdlc-b\n---\nskill B\n')
+        put(k.ref, 'skills/sdlc-b/guide.md', b'guide B\n')
+        commit_all(k.repo, 'version B')
+        code, out = self.restore(k)
+        self.assertEqual(code, 0, out)
+        put(k.live, 'skills/sdlc-b/guide.md', b'edited by hand after B\n')
+        archive = os.path.join(self.tmp, 'archive-c', 'claude')
+        shutil.copytree(k.ref, archive)
+        shutil.rmtree(os.path.join(archive, 'skills', 'sdlc-b'))
+        code, out = self.install(archive, k.live)
+        self.assertEqual(code, 0, out)
+        reg = self.registry(k.live)
+        self.assertNotIn('sdlc-b', reg['skills'])
+        self.assertIn('skills/sdlc-b/SKILL.md', reg['retained_hashes'])
+        code, out = run_cli(['uninstall', '--live', k.live, '--ref', os.path.join(self.tmp, 'no-repo'), '--force'])
+        self.assertEqual(code, 0, out)
+        self.assertFalse(has(k.live, 'skills/sdlc-b/SKILL.md'))
+        self.assertEqual(get(k.live, 'skills/sdlc-b/guide.md'), b'edited by hand after B\n')
+
+    def test_final_r1_03_rerun_after_post_check_failure_records_the_trace(self):
+        """restore B deploys, then fails its post-check (7) on a live EXTRA; once the extra is moved, the rerun
+        finds nothing to deploy but must still record the trace, so uninstall without history removes B's file."""
+        k = self.installed('fr103')
+        put(k.ref, 'commands/sdlc/new.md', b'new command of B\n')
+        commit_all(k.repo, 'version B')
+        put(k.live, 'agents/sdlc-extra.md', b'live only\n')
+        code, out = self.restore(k)
+        self.assertEqual(code, 7, out)
+        self.assertEqual(get(k.live, 'commands/sdlc/new.md'), b'new command of B\n')
+        # FINAL-R2-01: the trace is written as soon as the files are, whatever the post-check says, and holds
+        # only what restore wrote.
+        traced = self.registry(k.live)['file_hashes']
+        self.assertEqual(traced.get('commands/sdlc/new.md'), file_hash(k.live, 'commands/sdlc/new.md'))
+        self.assertNotIn('agents/sdlc-extra.md', traced)
+        os.remove(os.path.join(k.live, 'agents', 'sdlc-extra.md'))
+        registry = get(k.live, manifests.INSTALL_REGISTRY_REL)
+        code, out = self.restore(k)
+        self.assertEqual(code, 0, out)
+        self.assertEqual(get(k.live, manifests.INSTALL_REGISTRY_REL), registry)       # nothing to deploy: untouched
+        code, out = run_cli(['uninstall', '--live', k.live, '--ref', os.path.join(self.tmp, 'no-repo'), '--force'])
+        self.assertEqual(code, 0, out)
+        self.assertFalse(has(k.live, 'commands/sdlc/new.md'))
+
+    def test_final_r2_01_captured_personal_file_is_never_traced_by_a_plain_restore(self):
+        """install A, base seeded, a personal file added live then captured (HEAD == live == base), restore with
+        nothing to deploy: the registry is byte for byte the same, install A is still 'up to date', and uninstall
+        without history keeps the personal file."""
+        k = self.installed('fr201')
+        archive = os.path.join(self.tmp, 'archive-a', 'claude')
+        shutil.copytree(k.ref, archive)
+        put(k.live, 'commands/sdlc/perso.md', b'personal\n')
+        code, out = self.capture(k)
+        self.assertEqual(code, 0, out)
+        self.assertEqual(get(k.ref, 'commands/sdlc/perso.md'), b'personal\n')
+        registry = get(k.live, manifests.INSTALL_REGISTRY_REL)
+        code, out = self.restore(k)
+        self.assertEqual(code, 0, out)
+        self.assertEqual(get(k.live, manifests.INSTALL_REGISTRY_REL), registry)
+        code, out = self.install(archive, k.live)
+        self.assertEqual(code, 0, out)
+        self.assertIn('Already up to date', out)
+        code, out = run_cli(['uninstall', '--live', k.live, '--ref', os.path.join(self.tmp, 'no-repo'),
+                             '--force', '--remove-core'])
+        self.assertEqual(code, 0, out)
+        self.assertEqual(get(k.live, 'commands/sdlc/perso.md'), b'personal\n')
+
+    def test_final_r2_02_dangerous_registry_ignored_when_nothing_is_deployed(self):
+        """HEAD, live and base identical: the registry serves no operation, so a dangerous skill name in it is no
+        reason to refuse, in either mode. With a file to deploy it is still refused (3, e5_r1_07)."""
+        k = self.installed('fr202')
+        doc = self.registry(k.live)
+        doc['skills'] = ['../x']
+        put(k.live, manifests.INSTALL_REGISTRY_REL, json.dumps(doc).encode('utf-8'))
+        before = snapshot(k.live)
+        for flags in (('--dry-run',), ()):
+            code, out = self.restore(k, *flags)
+            self.assertEqual(code, 0, out)
+            self.assertEqual(snapshot(k.live), before)
+
+    def test_final_r3_01_failed_write_in_a_new_skill_does_not_publish_that_skill(self):
+        """A write succeeds, then the first file of a new skill fails (its folder already holds an empty personal
+        sub-folder): the trace holds the written file only, the registry does not declare the skill, and uninstall
+        without history keeps the personal sub-folder."""
+        k = self.installed('fr301')
+        put(k.ref, 'commands/sdlc/a.md', b'command a\n')
+        put(k.ref, 'skills/sdlc-b/SKILL.md', b'---\nname: sdlc-b\n---\nskill B\n')
+        commit_all(k.repo, 'version B')
+        personal = os.path.join(k.live, 'skills', 'sdlc-b', 'perso')
+        os.makedirs(personal)
+        real = restore_mod.safe_replace
+
+        def failing(dst, src, *args, **kw):
+            if 'sdlc-b' in dst.replace(os.sep, '/'):
+                raise OSError('injected failure')
+            return real(dst, src, *args, **kw)
+
+        with mock.patch.object(restore_mod, 'safe_replace', failing):
+            code, out = self.restore(k)
+        self.assertNotEqual(code, 0, out)
+        self.assertEqual(get(k.live, 'commands/sdlc/a.md'), b'command a\n')
+        reg = self.registry(k.live)
+        self.assertEqual(reg['file_hashes'].get('commands/sdlc/a.md'), file_hash(k.live, 'commands/sdlc/a.md'))
+        self.assertNotIn('skills/sdlc-b/SKILL.md', reg['file_hashes'])
+        self.assertNotIn('sdlc-b', reg['skills'])
+        code, out = run_cli(['uninstall', '--live', k.live, '--ref', os.path.join(self.tmp, 'no-repo'),
+                             '--force', '--remove-core'])
+        self.assertEqual(code, 0, out)
+        self.assertFalse(has(k.live, 'commands/sdlc/a.md'))
+        self.assertTrue(os.path.isdir(personal))
+
     def test_no_registry_no_trace(self):
         k = self.sync_case('notrace', seed=True)
         put(k.ref, B, b'beta-v2\n')
@@ -521,6 +636,83 @@ class Sequence(RestoreCase):
         self.assertEqual(code, 0, out)
         self.assertNotIn('deployment trace', out)
         self.assertFalse(has(k.live, manifests.INSTALL_REGISTRY_REL))
+
+
+
+class FinalReview(RestoreCase):
+    @unittest.skipUnless(os.name == 'nt', 'Windows read-only attribute')
+    def test_final_r2_04_hard_link_refusal_comes_before_dry_run_and_fast_forward(self):
+        """The refusal (3) covers a deletion carried by an upstream commit too: dry-run and real run alike leave HEAD,
+        the live tree, the backups and the other link's attribute untouched."""
+        k = self.sync_case('fr204', seed=True)
+        origin = os.path.join(self.tmp, 'fr204', 'origin.git')
+        git(k.repo, 'init', '--bare', '-q', origin)
+        git(k.repo, 'remote', 'add', 'origin', origin)
+        git(k.repo, 'push', '-q', '-u', 'origin', 'HEAD')
+        head = git(k.repo, 'rev-parse', 'HEAD')
+        os.remove(os.path.join(k.ref, *A.split('/')))
+        commit_all(k.repo, 'upstream deletes alpha')
+        git(k.repo, 'push', '-q', 'origin', 'HEAD')
+        git(k.repo, 'reset', '--hard', '-q', head)
+        target = os.path.join(k.live, *A.split('/'))
+        other = os.path.join(self.tmp, 'personal-link.md')
+        os.link(target, other)
+        os.chmod(target, stat.S_IREAD)
+        self.addCleanup(lambda: os.path.exists(other) and os.chmod(other, stat.S_IREAD | stat.S_IWRITE))
+        before = snapshot(k.live)
+        for flags in (('--dry-run',), ()):
+            code, out = self.restore(k, *flags)
+            self.assertEqual(code, 3, out)
+            self.assertEqual(git(k.repo, 'rev-parse', 'HEAD'), head)
+            self.assertEqual(snapshot(k.live), before)                   # no backup, no removal
+            self.assertFalse(os.stat(other).st_mode & stat.S_IWRITE)
+
+    @unittest.skipUnless(os.name == 'nt', 'Windows read-only attribute')
+    def test_final_r1_01_deleted_ref_read_only_with_another_hard_link(self):
+        k = self.sync_case('fr101', seed=True)
+        os.remove(os.path.join(k.ref, *A.split('/')))
+        commit_all(k.repo, 'ref: delete alpha')
+        target = os.path.join(k.live, *A.split('/'))
+        other = os.path.join(self.tmp, 'personal-link.md')
+        os.link(target, other)
+        os.chmod(target, stat.S_IREAD)
+        self.addCleanup(lambda: os.path.exists(other) and os.chmod(other, stat.S_IREAD | stat.S_IWRITE))
+        before = snapshot(k.live)
+        code, out = self.restore(k)
+        self.assertEqual(code, 3, out)
+        self.assertEqual(snapshot(k.live), before)                       # no backup, no removal
+        self.assertFalse(os.stat(other).st_mode & stat.S_IWRITE)
+
+    def test_final_r1_04_dry_run_never_fetches_in_a_partial_clone(self):
+        """A blob:none clone whose upstream is ahead: the upstream blob is absent; restore --dry-run must refuse (2)
+        without fetching it."""
+        k = self.sync_case('fr104', seed=True)
+        git(k.repo, 'config', 'uploadpack.allowFilter', 'true')
+        git(k.repo, 'config', 'uploadpack.allowAnySHA1InWant', 'true')
+        clone = os.path.join(self.tmp, 'fr104', 'clone')
+        url = 'file:///' + k.repo.replace(os.sep, '/').lstrip('/')
+        res = subprocess.run(['git', 'clone', '-q', '--filter=blob:none', url, clone], stdout=subprocess.PIPE,
+                             stderr=subprocess.PIPE)
+        if res.returncode != 0:
+            self.skipTest('partial clone not supported here: %s' % res.stderr.decode('utf-8', 'replace'))
+        put(k.ref, 'agents/sdlc-gamma.md', b'gamma\n')
+        commit_all(k.repo, 'upstream ahead')
+        git(clone, 'fetch', '-q')
+        blob = git(k.repo, 'rev-parse', 'HEAD:claude/agents/sdlc-gamma.md')
+        self.assertIn(blob, missing_objects(clone))
+        objects = snapshot(os.path.join(clone, '.git', 'objects'))
+        code, out = run_cli(['restore', '--ref', clone, '--live', k.live, '--manifest-path', k.manifest,
+                             '--dry-run'])
+        self.assertEqual(code, 2, out)
+        self.assertEqual(snapshot(os.path.join(clone, '.git', 'objects')), objects)
+        self.assertIn(blob, missing_objects(clone))
+
+
+def missing_objects(repo):
+    """Objects absent from a partial clone (--missing=print never fetches them)."""
+    res = subprocess.run(['git', '-C', repo, 'rev-list', '--objects', '--all', '--missing=print'],
+                         stdout=subprocess.PIPE, check=True)
+    return [l[1:] for l in res.stdout.decode().split() if l.startswith('?')]
 
 
 if __name__ == '__main__':

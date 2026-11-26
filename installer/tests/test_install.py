@@ -691,5 +691,64 @@ class Retained(InstallCase):
             manifests.read_install_registry(live)
 
 
+
+class PartialClone(InstallCase):
+    """FINAL-R1-04: a dry-run never fetches a missing object of a partial clone."""
+
+    def partial(self, name):
+        origin, _ref, live = self.new_case(name)
+        git(origin, 'config', 'uploadpack.allowFilter', 'true')
+        git(origin, 'config', 'uploadpack.allowAnySHA1InWant', 'true')
+        clone = os.path.join(self.tmp, name, 'clone')
+        url = 'file:///' + origin.replace(os.sep, '/').lstrip('/')
+        res = subprocess.run(['git', 'clone', '-q', '--filter=blob:none', '--sparse', url, clone],
+                             stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        if res.returncode != 0:
+            self.skipTest('partial clone not supported here: %s' % res.stderr.decode('utf-8', 'replace'))
+        git(clone, 'sparse-checkout', 'set', 'claude/commands')             # claude/ exists, skills/ blobs absent
+        blob = git(origin, 'rev-parse', 'HEAD:claude/skills/sdlc/SKILL.md')
+        self.assertIn(blob, self.missing(clone))
+        return clone, live, blob
+
+    def missing(self, repo):
+        res = subprocess.run(['git', '-C', repo, 'rev-list', '--objects', '--all', '--missing=print'],
+                             stdout=subprocess.PIPE, check=True)
+        return [l[1:] for l in res.stdout.decode().split() if l.startswith('?')]
+
+    def test_final_r1_04_install_dry_run_never_fetches(self):
+        clone, live, blob = self.partial('fr104i')
+        objects = snapshot(os.path.join(clone, '.git', 'objects'))
+        code, out = self.install(os.path.join(clone, 'claude'), live, '--dry-run')
+        self.assertEqual(code, 2, out)
+        self.assertEqual(snapshot(os.path.join(clone, '.git', 'objects')), objects)
+        self.assertIn(blob, self.missing(clone))
+
+    def test_final_r1_04_git_without_the_switch_refuses_before_reading(self):
+        clone, live, blob = self.partial('fr104o')
+        objects = snapshot(os.path.join(clone, '.git', 'objects'))
+        with mock.patch.object(gitstate, 'no_lazy_fetch_supported', lambda: False, create=True):
+            code, out = self.install(os.path.join(clone, 'claude'), live, '--dry-run')
+        self.assertEqual(code, 2, out)
+        self.assertIn('partial clone', out)
+        self.assertEqual(snapshot(os.path.join(clone, '.git', 'objects')), objects)
+        self.assertIn(blob, self.missing(clone))
+
+    def test_final_r2_03_partial_clone_filter_alone_is_enough(self):
+        """A Git without --no-lazy-fetch must refuse a clone whose only mark is remote.<name>.partialclonefilter
+        (promisor and extensions.partialclone absent), before reading any object."""
+        clone, live, blob = self.partial('fr203')
+        for key in ('remote.origin.promisor', 'extensions.partialclone'):
+            subprocess.run(['git', '-C', clone, 'config', '--unset', key], check=False)
+        self.assertEqual(git(clone, 'config', '--get', 'remote.origin.partialclonefilter'), 'blob:none')
+        self.assertTrue(gitstate.is_partial_clone(clone))
+        objects = snapshot(os.path.join(clone, '.git', 'objects'))
+        with mock.patch.object(gitstate, 'no_lazy_fetch_supported', lambda: False, create=True):
+            code, out = self.install(os.path.join(clone, 'claude'), live, '--dry-run')
+        self.assertEqual(code, 2, out)
+        self.assertIn('cannot read objects without fetching', out)
+        self.assertEqual(snapshot(os.path.join(clone, '.git', 'objects')), objects)
+        self.assertIn(blob, self.missing(clone))
+
+
 if __name__ == '__main__':
     unittest.main()

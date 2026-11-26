@@ -218,14 +218,8 @@ def revisions(root):
             ('c', 'HEAD', head)]
 
 
-def partial_clone(root):
-    """E6-R1-11, E6-R2-02: in a partial clone (extensions.partialClone, or any remote.<name>.promisor set to true),
-    reading an old object may fetch it and write under .git/objects; the whole probe is then skipped."""
-    res = _git(root, 'config', '--get', 'extensions.partialclone')
-    if res.returncode == 0 and res.stdout.strip():
-        return True
-    res = _git(root, 'config', '--bool', '--get-regexp', r'^remote\..*\.promisor$')
-    return res.returncode == 0 and any(line.split()[-1:] == [b'true'] for line in res.stdout.splitlines())
+# E6-R1-11, E6-R2-02: in a partial clone the whole history probe is skipped.
+partial_clone = gitstate.is_partial_clone
 
 
 def revision_count(root, rev, patterns):

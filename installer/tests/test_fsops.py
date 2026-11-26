@@ -1,5 +1,6 @@
 import os
 import stat
+import unittest
 
 from sdlc_installer import fsops
 from sdlc_installer.errors import InstallerError
@@ -76,3 +77,17 @@ class SafeReplace(TempDirCase):
         with self.assertRaises(TypeError):
             fsops.safe_replace(p, 'not bytes')
         self.assertEqual(os.listdir(self.tmp), [])
+
+    @unittest.skipUnless(os.name == 'nt', 'Windows read-only attribute')
+    def test_final_r1_05_read_only_destination_leaves_no_temp(self):
+        """The temp copies the read-only mode; the replace fails; the temp must still be removed."""
+        from unittest import mock
+        p = self.write('ro.md', b'old\n')
+        os.chmod(p, stat.S_IREAD)
+        self.addCleanup(lambda: os.path.exists(p) and os.chmod(p, stat.S_IREAD | stat.S_IWRITE))
+        with mock.patch.object(fsops.time, 'sleep', lambda s: None):
+            with self.assertRaises(PermissionError):
+                fsops.safe_replace(p, b'new\n')
+        self.assertEqual(fsops.read_bytes(p), b'old\n')
+        self.assertFalse(os.stat(p).st_mode & stat.S_IWRITE)               # destination untouched
+        self.assertEqual([n for n in os.listdir(self.tmp) if n.startswith('.sdlc-tmp-')], [])

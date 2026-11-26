@@ -9,13 +9,15 @@
   added-live -> protected; identical, absent-both -> ignored. One block: nothing written.
 - Backup of every live file replaced or removed, atomic replacement, removals, then verify against HEAD: any
   difference (EXTRA included, as restore.ps1) or verify unavailable gives 7.
-- After a clean post-check, the deployment trace goes into the install registry when it exists (§4, R3-06).
+- Once the files are written, the deployment trace goes into the install registry when it exists (§4, R3-06), whether
+  the post-check passes or not (FINAL-R1-03): it holds the files restore itself wrote, never one it left alone
+  (FINAL-R2-01), so a rerun after a post-check failure (7) needs no heuristic.
 restore never writes the sync manifest (capture owns it, §4 point 2).
 """
 import collections
 import os
 
-from . import backup, gitstate, inventory, locks, manifests, paths, syncstate
+from . import backup, fsops, gitstate, inventory, locks, manifests, paths, syncstate
 from . import verify as verify_mod
 from .capture import Side, _Out, check_backup_root, check_union, live_side, read_base, resolve_roots, show_diff
 from .domain import is_valid_skill_name
@@ -98,12 +100,14 @@ def run(opts, write=print):
     roots = resolve_roots(opts.ref, opts.subdir, opts.live, opts.manifest, None, 'restore')
     write('restore %s: ref=%s  live=%s' % ('[dry-run] ' if opts.dry_run else '', roots.ref, roots.live))
     if opts.dry_run:
-        return _restore(roots, opts, out)              # design §2: no lock and no fast-forward in dry-run
+        with gitstate.local_objects_only():             # FINAL-R1-04: never fetch a missing object
+            return _restore(roots, opts, out)          # design §2: no lock and no fast-forward in dry-run
     with locks.live_lock(roots.live):
         return _restore(roots, opts, out)
 
 
 def _restore(roots, opts, out):
+    gitstate.require_local_objects(roots.repo)          # dry-run only, before the first object read
     if gitstate.is_dirty(roots.repo, roots.subdir):
         out.err('restore: REF tree (%s/) not clean - commit/reconcile the ref before restoring. Nothing written.'
                 % roots.subdir)
@@ -164,11 +168,12 @@ def _restore(roots, opts, out):
     for rel in touched:
         if os.path.lexists(targets[rel]) and not os.path.isfile(targets[rel]):
             raise SecurityError('not a regular file where a canonical file goes: %s' % targets[rel])
+    fsops.check_removable(dict((rel, targets[rel]) for rel in delete))        # FINAL-R1-01
     present = [rel for rel in touched if os.path.lexists(targets[rel])]
     if present:
         check_backup_root(roots.live)
 
-    trace, skills, registry = _trace_plan(roots, ref, deploy, out)     # E5-R1-05, E5-R1-07: both modes
+    trace, registry = _trace_plan(roots, ref, deploy, out)                  # E5-R1-05, E5-R1-07: both modes
 
     if opts.dry_run:
         if fast_forward:
@@ -190,8 +195,13 @@ def _restore(roots, opts, out):
     if present:
         folder, saved = backup.backup_files(roots.live, present, 'restore')
         out.warn('[BACKUP] %d live file(s) backed up -> %s' % (len(saved), folder))
-    for rel in deploy:
-        safe_replace(targets[rel], ref.files[rel])
+    written = []
+    try:
+        for rel in deploy:
+            safe_replace(targets[rel], ref.files[rel])
+            written.append(rel)
+    finally:
+        _record_trace(roots, trace, registry, written, out)     # what was written, even if a write failed
     if deploy:
         out.ok('restore: %d file(s) deployed ref->live.' % len(deploy))
     for rel in delete:
@@ -212,26 +222,36 @@ def _restore(roots, opts, out):
         out.warn("Run 'verify' again for details. The timestamped backups are recoverable.")
         return DRIFT
 
-    if trace is not None and manifests.update_file_hashes(roots.live, trace, skills, registry):
-        out.ok('install registry: deployment trace recorded for %d file(s).' % len(trace))
     out.ok('restore: OK - live matches the canonical REF (verify post-check 0 drift).')
     return OK
 
 
 def _trace_plan(roots, ref, deploy, out):
-    """(rel -> sha256, skills) for the install registry trace, or (None, None) when there is nothing to record.
-    Computed before the first mutation; a corrupt registry is left alone with a warning (it is install's to fix)."""
+    """(rel -> sha256, registry) for the install registry trace, or (None, None) when restore has
+    nothing to deploy (the registry is then not even read, FINAL-R2-02), when there is no modern registry, or when it
+    is corrupt (left alone with a warning: it is install's to fix). The trace covers the files to deploy only
+    (FINAL-R2-01); computed and validated before the first mutation."""
     if not deploy:
-        return None, None, None
+        return None, None
     try:
         reg = manifests.read_install_registry(roots.live)
     except manifests.CorruptRegistry as exc:
         out.warn('install registry unreadable, no deployment trace written (%s)' % exc)
-        return None, None, None
+        return None, None
     if reg is None or reg.file_hashes is None:
-        return None, None, None
+        return None, None
     trace = dict((rel, ref.hashes[rel]) for rel in deploy)
     manifests.check_trace(roots.live, reg, trace)            # E5-R2-07: both tables, parents included
-    deployed_skills = set(rel.split('/')[1] for rel in deploy if rel.startswith('skills/'))
-    skills = sorted(set(reg.skills) | set(s for s in deployed_skills if is_valid_skill_name(s)))
-    return trace, skills, reg
+    return trace, reg
+
+
+def _record_trace(roots, trace, registry, written, out):
+    """Records the hashes of the files restore actually wrote (a subset of the planned trace when a write failed)."""
+    if trace is None or not written:
+        return
+    done = dict((rel, trace[rel]) for rel in written)
+    # skills published: those already registered plus those of the files actually written (FINAL-R3-01)
+    wrote = set(rel.split('/')[1] for rel in written if rel.startswith('skills/'))
+    skills = sorted(set(registry.skills) | set(s for s in wrote if is_valid_skill_name(s)))
+    if manifests.update_file_hashes(roots.live, done, skills, registry):
+        out.ok('install registry: deployment trace recorded for %d file(s).' % len(done))

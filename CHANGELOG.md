@@ -20,6 +20,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Uninstall removes only the bundle files whose hash matches the install manifest (`file_hashes`); a personal or hand-modified file in an SDLC folder is kept and reported. An older install whose manifest has no `file_hashes` keeps the previous behavior, with a warning before removal.
 
 ### Fixed
+- Python `restore` and `uninstall` refuse (3), before any change, to remove a Windows read-only file that has other hard links, the install manifest included; `restore` used to clear the read-only attribute of the outside link.
+- Python `uninstall` also scans a skill folder proven by `retained_hashes` when the last install omitted that skill, so its untouched files are removed instead of left behind.
+- Python `restore` records the deployment trace for the files it wrote even when the post-check fails (code 7), and never for a file it did not write; with nothing to deploy it does not read the install registry.
+- Python `install --dry-run` and `restore --dry-run` never fetch a missing object of a partial clone: Git runs with `--no-lazy-fetch` (a missing object gives 2), and a Git without that option is refused (2) in a partial clone (`extensions.partialClone`, a `promisor` remote or a `partialclonefilter` remote).
+- `fsops.safe_replace` no longer leaves a `.sdlc-tmp-*` file on Windows when replacing a read-only file fails.
+- Python `restore` publishes in the install registry only the skills of the files it actually wrote (plus those already registered): a failed write in a new skill no longer declares it installed.
+- `bundle/docs/SYNC.md` no longer claims that a failed write aborts before any change: a deployment can be partial, and the doc says how to rerun or recover from `_backups/`.
 - `capture.sh` refused nothing when RefRoot did not exist (GNU `realpath` accepts a missing last component) and seeded an empty sync base in live; both `capture` scripts now require existing directories (code 2).
 - PowerShell `Acquire-SyncLock` went on WITHOUT the lock when the lock path was a directory (the Bash form); it now refuses like any held lock.
 - `get_file_hash_byteexact` (Bash) hashed a `\`-prefixed line for Windows paths with backslashes, so `verify.sh` reported false HASH DIFF; it now hashes stdin.

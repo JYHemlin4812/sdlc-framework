@@ -54,7 +54,11 @@ Each file is classified by comparing ref, live and the base (last synced hash):
 ## Safeguards (data loss)
 
 - **O_EXCL lock** (`~/.claude/.sync.lock`) around every mutation; released on exit. A dry-run takes no lock and writes nothing.
-- **Atomic write**: temp file + rename (`mv -f` / `Replace`), never in place. A **failed write** aborts before any destructive action.
+- **Atomic write**, file by file: temp file + rename (`os.replace`), never in place. The planned backups are made
+  before the first replacement. A failed write stops the operation, but the files already replaced stay replaced
+  (partial deployment) and the install manifest may still describe the previous version. Fix the cause, then run
+  the same command again (`install --force` redeploys every file), or copy the saved files back from the
+  `_backups/` folder named in the output.
 - **Timestamped backup** under `_backups/` (excluded from sync) **before** any replacement or deletion.
 - Exclusive **per-relPath greenlist** + path-traversal guard; **no destructive mirror** (`/MIR`, `rsync --delete`, `cp -r`).
 - **Corrupt manifest** → **fail-closed** (empty base, never "identical" by default).

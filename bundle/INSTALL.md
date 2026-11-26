@@ -8,47 +8,41 @@ How to install, verify, update and uninstall the SDLC bundle in `~/.claude/`.
 
 | Component | Minimum | Check |
 |---|---|---|
-| **PowerShell** (Windows) | 7.0 recommended (5.1 supported) | `pwsh -v` |
-| **bash** (Linux/macOS) | 4.0 (macOS ships 3.2: `brew install bash`) | `bash --version` |
-| **Python** | 3.9 | `python --version` or `python3 --version` |
-| **git** | any recent version | `git --version` |
+| **Python** | 3.9 (standard library only) | `python --version` or `python3 --version` |
+| **git** | 2.26 or later | `git --version` |
 | **Claude Code** | recent | `claude --version` |
 
-On Windows without PowerShell 7: `winget install Microsoft.PowerShell`.
+One installer for every platform: `python installer/install.py <command>` (`python3` on
+Linux). Tested on Windows and Linux (WSL Ubuntu); macOS is not verified yet.
 
-git is only needed for the post-install check (`verify`) and for the sync scripts; the
-install itself works from an extracted archive too.
+git is only needed for the post-install check (`verify`) and for `capture` / `restore`;
+the install itself works from an extracted archive too.
+
+The former PowerShell and bash scripts of `bundle/scripts/` are removed; use the Python installer.
 
 ---
 
 ## Install
 
-### Windows (PowerShell 7)
-
-```powershell
-git clone https://github.com/JYHemlin4812/sdlc-framework.git
-cd sdlc-framework
-pwsh bundle/scripts/install.ps1
-```
-
-### Linux / macOS
-
 ```bash
 git clone https://github.com/JYHemlin4812/sdlc-framework.git
 cd sdlc-framework
-bash bundle/scripts/install.sh
+python installer/install.py install
 ```
+
+From a clean clone, the installer deploys the files of the committed `HEAD`. If `claude/`
+has uncommitted changes it refuses (exit 5); `--allow-dirty` deploys the working tree instead.
 
 ### Install options
 
-| Flag (PS / bash) | Effect |
+| Flag | Effect |
 |---|---|
-| `-DryRun` / `--dry-run` | Simulation: lists what would be deployed, writes nothing. |
-| `-Force` / `--force` | Reinstall even if the checksum is unchanged. |
-| `-NoBackup` / `--no-backup` | Skip the backup before replacing files (not recommended). |
-| `-ClaudeRoot <path>` / `--claude-root <path>` | Target directory (default: `~/.claude`). |
-| `-SourceRoot <path>` / `--source-root <path>` | Source directory (default: `claude/` at the repository root). |
-| `-RemoveImport` / `--remove-import` | Only remove the `@NESTOR.md` import line from `~/.claude/CLAUDE.md`, then exit (optional `nestor-agents` interop). |
+| `--dry-run` | Simulation: lists what would be deployed, writes nothing. |
+| `--force` | Reinstall even if the installed version is unchanged. |
+| `--no-backup` | No backup of bundle files before replacing them (a file the installer cannot recognize as a bundle file is always backed up). |
+| `--allow-dirty` | Deploy the working tree of a `claude/` folder that has uncommitted changes. |
+| `--live <path>` | Target directory (default: `~/.claude`). |
+| `--source <path>` | Source directory (default: `claude/` at the repository root). |
 
 ### What gets installed
 
@@ -63,7 +57,7 @@ bash bundle/scripts/install.sh
 │   ├── sdlc-architecture/ sdlc-contract/ sdlc-delivery/   (adapted from BPSE)
 │   └── sdlc-debugger/ sdlc-evolve/ sdlc-finish/ sdlc-receive-review/ sdlc-reviewer/ sdlc-verify/
 ├── commands/
-│   └── sdlc/                       (18 slash commands)
+│   └── sdlc/                       (19 slash commands)
 └── agents/
     └── sdlc-*.md                   (12 subagents)
 ```
@@ -96,8 +90,8 @@ The 19 commands are listed in `README.md`; their contracts are in
 
 The installer runs `verify` automatically at the end. To run it yourself:
 
-```powershell
-pwsh bundle/scripts/verify.ps1          # or: bash bundle/scripts/verify.sh
+```bash
+python installer/install.py verify
 ```
 
 `verify` is read-only. It compares every installed file of the SDLC domain with the
@@ -117,13 +111,20 @@ fewer skills, agents or commands than the canonical tree).
 
 Pull the repository and run the installer again:
 
-- unchanged checksum: reports that everything is already up to date, exit 0, nothing written;
-- changed checksum: timestamped backup, then the changed files are deployed and the manifest updated.
+- unchanged source and installed files intact: reports that everything is already up to date,
+  exit 0, no bundle file redeployed (the installer may still recreate an empty `CLAUDE.local.md`
+  if you deleted it, or add its `@CLAUDE.local.md` import line back to `CLAUDE.md`, after a backup
+  of `CLAUDE.md`);
+- unchanged source but an installed file missing or edited since: **repair**, the bundle version
+  is put back (your edited file is backed up first);
+- changed source: timestamped backup, then the changed files are deployed and the manifest updated.
 
-```powershell
-pwsh bundle/scripts/install.ps1            # standard update (with backup)
-pwsh bundle/scripts/install.ps1 -Force     # reinstall even if up to date
-pwsh bundle/scripts/install.ps1 -DryRun    # preview, no changes
+To keep a local edit, capture it into the repository first (`docs/SYNC.md`).
+
+```bash
+python installer/install.py install             # standard update (with backup)
+python installer/install.py install --force     # reinstall even if up to date
+python installer/install.py install --dry-run   # preview, no changes
 ```
 
 Backups are stored under `~/.claude/_backups/`.
@@ -135,23 +136,30 @@ round), use `capture` / `restore`: see `docs/SYNC.md`.
 
 ## Uninstall
 
-```powershell
-pwsh bundle/scripts/uninstall.ps1          # Windows
-bash bundle/scripts/uninstall.sh           # Linux / macOS
+```bash
+python installer/install.py uninstall
 ```
 
 Behavior:
 
 - reads `~/.claude/skills/sdlc/.install-manifest.json` to know exactly what to remove;
-- always backs up to `~/.claude/skills/_backups/sdlc-uninstall-<timestamp>/` first;
+- removes only the files it can prove come from the bundle (recorded hashes, or a version
+  committed in the repository history); files you added or edited are kept and reported.
+  Exception: an install made by an older installer, whose manifest records no per-file hashes,
+  when the repository history cannot be read either (no `--ref` repository): every file in
+  the SDLC folders is removed, personal files included, after a warning and a backup;
+- backs up everything it removes to `~/.claude/_backups/uninstall-<timestamp>/` first;
 - removes the `sdlc*` skills and `commands/sdlc/`; other skills are left untouched;
-- without a manifest, refuses by default (use `-Discover` / `--discover` to remove by naming convention).
+- without a readable manifest, refuses by default (exit 2). `--discover` finds the candidate
+  folders by name (`skills/sdlc*`, `commands/sdlc`) and removes only the files the Git history
+  of the repository proves to be bundle files.
 
-| Flag (PS / bash) | Effect |
+| Flag | Effect |
 |---|---|
-| `-Force` / `--force` | No interactive confirmation. |
-| `-Discover` / `--discover` | Expert mode when the manifest is missing. |
-| `-RemoveCore` / `--remove-core` | Also remove the installed `sdlc-*` / `nestor-*` agents and `NESTOR.md`, and the `@NESTOR.md` import in `CLAUDE.md` (optional `nestor-agents` interop). |
+| `--force` | No interactive confirmation. |
+| `--discover` | Expert mode when the manifest is missing or unreadable. |
+| `--remove-core` | Also remove the installed `sdlc-*` agents. Other files, including `CLAUDE.md`, are left as they are. |
+| `--ref <path>` | Repository used as proof of origin (default: this repository). |
 
 ---
 
@@ -175,7 +183,7 @@ installed files are backed up before any upgrade or uninstall.
 
 1. Restart Claude Code completely (not just a reload).
 2. Check that `~/.claude/commands/sdlc/brainstorm.md` exists.
-3. Run `pwsh bundle/scripts/verify.ps1` to diagnose.
+3. Run `python installer/install.py verify` to diagnose.
 
 ### Skill not triggered by natural-language requests
 
@@ -185,11 +193,11 @@ Triggers are defined in the `description:` frontmatter of
 
 ### Manifest missing after install
 
-```powershell
+```bash
 ls "$HOME/.claude/skills/sdlc/.install-manifest.json"
 ```
 
-If it is missing, the install failed part-way. Run it again with `-Force` / `--force`.
+If it is missing, the install failed part-way. Run it again with `--force`.
 
 ---
 

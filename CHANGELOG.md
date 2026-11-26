@@ -7,7 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `installer/`: first step (E1) of the Python installer: domain, derived inventory, path safety, atomic replace, shared lock, backups, single entry point `installer/install.py`, and an exit-code parity suite against the Bash and PowerShell scripts.
+- Python installer, steps E2 to E6: `python installer/install.py install | verify | uninstall | capture | restore | scan-fuites` (Python 3.9+, standard library only, git 2.26+), with ownership proof by recorded hashes or Git history, and the differences from the scripts listed in `installer/parite.md`.
+
+### Removed
+- The PowerShell and bash scripts of `bundle/scripts/` (`install`, `uninstall`, `verify`, `capture`, `restore`, `scan-fuites`, `sync-lib`) and their test suites: replaced by `python installer/install.py`. Each assertion of the removed suites maps to a Python test in `installer/parite.md`; the exit-code and report parity tests run the scripts of commit `c7c437f`.
+- Removed every reference to components outside this repository: the interop document, the import line in `CLAUDE.md` (the installer no longer adds, reads or removes it, and keeps it when present), the `--remove-import` option, the external agents and core file in `--remove-core` (which now removes only the `sdlc-*` agents), and the zone of `scan-fuites` that matched an external folder.
+
+### Changed
+- `verify` (Python) returns 2 (unavailable) when HEAD holds no file of the SDLC domain, instead of the vacuous 0 of the scripts (decision of 2026-11-26).
+- Uninstall removes only the bundle files whose hash matches the install manifest (`file_hashes`); a personal or hand-modified file in an SDLC folder is kept and reported. An older install whose manifest has no `file_hashes` keeps the previous behavior, with a warning before removal.
+
 ### Fixed
+- Python `restore` and `uninstall` refuse (3), before any change, to remove a Windows read-only file that has other hard links, the install manifest included; `restore` used to clear the read-only attribute of the outside link.
+- Python `uninstall` also scans a skill folder proven by `retained_hashes` when the last install omitted that skill, so its untouched files are removed instead of left behind.
+- Python `restore` records the deployment trace for the files it wrote even when the post-check fails (code 7), and never for a file it did not write; with nothing to deploy it does not read the install registry.
+- Python `install --dry-run` and `restore --dry-run` never fetch a missing object of a partial clone: Git runs with `--no-lazy-fetch` (a missing object gives 2), and a Git without that option is refused (2) in a partial clone (`extensions.partialClone`, a `promisor` remote or a `partialclonefilter` remote).
+- `fsops.safe_replace` no longer leaves a `.sdlc-tmp-*` file on Windows when replacing a read-only file fails.
+- Python `restore` publishes in the install registry only the skills of the files it actually wrote (plus those already registered): a failed write in a new skill no longer declares it installed.
+- `bundle/docs/SYNC.md` no longer claims that a failed write aborts before any change: a deployment can be partial, and the doc says how to rerun or recover from `_backups/`.
+- `capture.sh` refused nothing when RefRoot did not exist (GNU `realpath` accepts a missing last component) and seeded an empty sync base in live; both `capture` scripts now require existing directories (code 2).
+- PowerShell `Acquire-SyncLock` went on WITHOUT the lock when the lock path was a directory (the Bash form); it now refuses like any held lock.
+- `get_file_hash_byteexact` (Bash) hashed a `\`-prefixed line for Windows paths with backslashes, so `verify.sh` reported false HASH DIFF; it now hashes stdin.
+- `capture` (Bash and PowerShell) finishes an interrupted capture: when a file was copied to the reference but the commit was rejected, the next run commits it instead of reporting "nothing to capture"; when the commit landed but the sync base was not written, the next run refreshes the base.
+- `planchers.assert.ps1` no longer crashes on the removed `core` counter; pinned floors updated to the current domain (14 skills, 12 agents, 19 commands).
 - AQ Gate (`check_sdlc.py`) now depends on `documentation_tier`. A standard project initialised
   with the untouched templates used to pass (exit 0); unfilled template placeholders are now
   errors at every tier except `none` and absent. The `minimal` tier checks `HANDOFF.md` and

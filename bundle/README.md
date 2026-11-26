@@ -22,16 +22,15 @@ that anyone, human or AI, can pick up an abandoned project in under 10 minutes.
 git clone https://github.com/JYHemlin4812/sdlc-framework.git
 cd sdlc-framework
 
-# Windows (PowerShell 7+)
-pwsh bundle/scripts/install.ps1
-
-# Linux / macOS (bash 4+)
-bash bundle/scripts/install.sh
+# Windows, Linux (Python 3.9+, git; macOS not verified yet)
+python installer/install.py install
 ```
 
 The installer deploys the canonical content of `claude/` to `~/.claude/`:
 14 skills (`skills/sdlc*`), 19 slash commands (`commands/sdlc/`) and 12 agents
-(`agents/sdlc-*`). It is idempotent (skipped when the checksum is unchanged), takes a
+(`agents/sdlc-*`). It is idempotent (no bundle file redeployed when the source is unchanged and the installed
+files are intact, though it may restore `CLAUDE.local.md` and its import; a missing or edited
+installed file is put back), takes a
 timestamped backup before replacing any file, and refuses to overwrite a third-party skill
 of the same name. Full details: `INSTALL.md`.
 
@@ -45,9 +44,9 @@ Restart Claude Code, then:
 /sdlc:gate                      # AQ Gate
 ```
 
-Check the installation: `pwsh bundle/scripts/verify.ps1` (or `bash bundle/scripts/verify.sh`)
-compares every installed file with the committed canonical tree by hash.
-Uninstall: `pwsh bundle/scripts/uninstall.ps1` (or `bash bundle/scripts/uninstall.sh`).
+Check the installation: `python installer/install.py verify` compares every installed file with
+the committed canonical tree by hash.
+Uninstall: `python installer/install.py uninstall`.
 
 ### Bootstrap a user project
 
@@ -73,8 +72,6 @@ bundle/
 ├── docs/
 │   ├── SYNC.md           ← bidirectional sync between ~/.claude and the repo
 │   └── KNOWN-ISSUES.md   ← known limitations of the sync scripts
-├── scripts/              ← install / uninstall / verify / capture / restore / sync-lib / scan-fuites
-│   └── tests/            ← self-contained script tests (.sh and .ps1)
 └── templates/            ← SDLC_PM/ project templates
 ```
 
@@ -149,9 +146,8 @@ field markers stay in English so the tooling can parse them. Full example:
 # Python tests of the skills
 PYTHONUTF8=1 python -m pytest -q claude/skills
 
-# Install/sync script tests
-for t in bundle/scripts/tests/test-*.sh; do bash "$t" || echo "FAIL $t"; done
-pwsh -NoProfile -File bundle/scripts/tests/test-install.ps1   # same for the other test-*.ps1
+# Installer tests (install, verify, uninstall, capture, restore, scan-fuites)
+python -B -m unittest discover -s installer/tests -t installer
 ```
 
 ---
@@ -162,4 +158,3 @@ pwsh -NoProfile -File bundle/scripts/tests/test-install.ps1   # same for the oth
 - `docs/SYNC.md` — capture / restore / verify between `~/.claude` and the repository
 - `claude/skills/sdlc/SKILL.md` — orchestrator skill
 - `claude/skills/sdlc/references/documentation-tiers.md` — documentation tiers
-- Optional interoperability with `nestor-agents`: `docs/INTEROP.md` at the repository root

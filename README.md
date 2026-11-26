@@ -10,15 +10,13 @@ from scoping to release with end-to-end traceability (requirements E### → arch
 A### → codable tasks P### → test cases T###), a blocking quality gate (AQ Gate), Code Lock and
 parallel execution in waves.
 
-Standalone. It can optionally work alongside
-[`nestor-agents`](https://github.com/JYHemlin4812/nestor-agents) (see
-[`docs/INTEROP.md`](docs/INTEROP.md)).
+Standalone.
 
 ## Requirements
 
 - [Claude Code](https://claude.com/claude-code) — the framework runs inside it.
-- Python 3.9+ (AQ Gate and wave planner scripts), git, and PowerShell 7 (Windows) or bash 4+
-  (Linux/macOS) for the installer. Details in [`bundle/INSTALL.md`](bundle/INSTALL.md).
+- Python 3.9+ (installer, AQ Gate and wave planner scripts) and git. Details in
+  [`bundle/INSTALL.md`](bundle/INSTALL.md).
 
 ## Languages
 
@@ -45,33 +43,23 @@ Upgrading from v3.x: see [`bundle/MIGRATION_v3_v4.md`](bundle/MIGRATION_v3_v4.md
 
 ## Quickstart
 
-Clone the repository and run the installer — under 5 minutes, no prior configuration. Both
-commands deploy the same content (`sdlc*` skills, `/sdlc:*` commands, `sdlc-*` agents) to
-`~/.claude/` and report the same result.
-
-### PowerShell (Windows)
-
-```powershell
-git clone https://github.com/JYHemlin4812/sdlc-framework.git
-cd sdlc-framework
-pwsh bundle/scripts/install.ps1
-```
-
-### Bash (Linux/macOS)
+Clone the repository and run the installer — under 5 minutes, no prior configuration. It needs
+Python 3.9+ and git, and deploys the `sdlc*` skills, `/sdlc:*` commands and `sdlc-*` agents to
+`~/.claude/` (Windows and Linux; macOS not verified yet).
 
 ```bash
 git clone https://github.com/JYHemlin4812/sdlc-framework.git
 cd sdlc-framework
-bash bundle/scripts/install.sh
+python installer/install.py install      # python3 on Linux
 ```
 
-**Expected result (both commands)**: an `Installation complete` report listing the number of
-skills/commands/agents deployed and the target path (`~/.claude/` by default). Restart Claude
-Code, then run `/sdlc:init` in your project (or `/sdlc:status` to check the install).
+**Expected result**: an `Installation complete` line with the number of skills/commands/agents
+deployed and the version. Restart Claude Code, then run `/sdlc:init` in your project (or
+`/sdlc:status` to check the install).
 
-Useful options (same in both scripts, native flag style per shell):
-`-DryRun`/`--dry-run` (simulation, no writes), `-Force`/`--force` (reinstall even if up to date),
-`-NoBackup`/`--no-backup` (no timestamped backup before replacing).
+Useful options: `--dry-run` (simulation, no writes), `--force` (reinstall even if up to date),
+`--no-backup` (no backup of bundle files before replacing). The former PowerShell and
+bash scripts of `bundle/scripts/` are removed.
 
 ## Typical workflow
 
@@ -90,7 +78,8 @@ check_sdlc.py --phase plan → planning gate, exit 0 required before /sdlc:dev
 ```
 sdlc-framework/
 ├── claude/           # Canonical content deployed by the installer (skills, commands/sdlc, agents)
-├── bundle/           # Install/uninstall/verify/sync scripts and their tests, templates, install docs
+├── installer/        # Python installer (install, verify, uninstall, capture, restore, scan-fuites) and its tests
+├── bundle/           # SDLC_PM templates, install and sync docs, migration guides
 ├── docs/             # Interop, known issues, historical notes
 ├── AGENTS.md         # Instructions for AI agents + detailed bundle inventory
 ├── CONTRIBUTING.md   # Contribution workflow, conventions, validation before a PR

@@ -14,8 +14,8 @@ description: |
 
 # sdlc-wave-orchestrator — parallel execution in waves
 
-Included in the SDLC bundle (installable via `scripts/install.ps1` or
-`scripts/install.sh`). This sub-skill holds the parallelism mechanics of SDLC:
+Included in the SDLC bundle (installable via `python installer/install.py
+install`). This sub-skill holds the parallelism mechanics of SDLC:
 computing waves from the P### DAG, launching subagents in batches, and
 synchronizing between waves through a lockfile.
 

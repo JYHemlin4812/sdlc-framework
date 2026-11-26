@@ -31,7 +31,7 @@ file in `~/.claude/agents/` to override.
    ```bash
    cd sdlc-framework
    git pull
-   pwsh bundle/scripts/install.ps1      # or: bash bundle/scripts/install.sh
+   python installer/install.py install
    ```
 
    The installer backs up every file it replaces under `~/.claude/_backups/`. If you edited

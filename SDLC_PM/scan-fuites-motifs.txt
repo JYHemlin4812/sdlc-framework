@@ -1,5 +1,5 @@
-# Level-2 patterns (internal zone) for the leak scan (scan-fuites.ps1 / scan-fuites.sh).
-# One regex per line (.NET for scan-fuites.ps1, POSIX ERE for scan-fuites.sh);
+# Level-2 patterns (internal zone) for the leak scan (python installer/install.py scan-fuites).
+# One Python regex (module re, case-insensitive) per line; an invalid one stops the scan (exit 2);
 # blank lines and '#' comments are ignored. This file lives in the internal zone
 # (SDLC_PM/), so it may hold private tokens without being flagged itself.
 # Keep it inside SDLC_PM/: moving it elsewhere changes the zoning.

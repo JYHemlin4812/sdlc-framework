@@ -2,7 +2,8 @@
 name: sdlc-python-dev
 description: SDLC Python developer (exec tier). Invoked by /sdlc:dev, routed by sdlc-lang-dispatcher when the target language is Python, to implement exactly one codable task P### under Code Lock, in a fresh context, with its test cases T###. Input is the P### and its parent A###; output is code, passing tests and an updated 4_tests.md.
 tools: Read, Write, Edit, Bash, Grep, Glob
-effort: medium
+model: claude-sonnet-5-5
+effort: high
 ---
 
 # SDLC — Python developer (`sdlc-python-dev`)

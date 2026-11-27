@@ -64,21 +64,22 @@ Strict scope: `claude/` only — nothing outside this folder is covered here.
 
 ### Agents (12)
 
-`Effort` is the `effort:` key in the agent's frontmatter, set by tier (`simple` → `low`,
-`exec` → `medium`, `design` → `high`). The model comes from the project's `model_profile`
-(see `claude/skills/sdlc/references/model-profiles.md`).
+`Effort` is the `effort:` key and `Model` the `model:` key of the agent's frontmatter (default: no key).
+The frontmatter model is used when the caller passes none; a model resolved from the project's
+`model_profile` and passed to the subagent call takes precedence (see
+`claude/skills/sdlc/references/model-profiles.md`).
 
-| Agent | Tier | Effort | Role | Source |
-|---|---|---|---|---|
-| `sdlc-architect` | design | `high` | Writes `2_architecture.md` (A###:E### + ADR) | `claude/agents/sdlc-architect.md` |
-| `sdlc-archive-manager` | simple | `low` | Archives non-essential session artifacts (`/sdlc:exit`) | `claude/agents/sdlc-archive-manager.md` |
-| `sdlc-business-analyst` | exec | `medium` | Requirements E### with MoSCoW and BDD criteria | `claude/agents/sdlc-business-analyst.md` |
-| `sdlc-code-auditor` | simple | `low` | Read-only observation of an existing project (`/sdlc:import`) | `claude/agents/sdlc-code-auditor.md` |
-| `sdlc-discussion-facilitator` | design | `high` | ADR drafts in `2_5_discussion.md` | `claude/agents/sdlc-discussion-facilitator.md` |
-| `sdlc-go-dev` | exec | `medium` | Implements one P### in Go + its T### | `claude/agents/sdlc-go-dev.md` |
-| `sdlc-js-dev` | exec | `medium` | Implements one P### in JavaScript/TypeScript + its T### | `claude/agents/sdlc-js-dev.md` |
-| `sdlc-python-dev` | exec | `medium` | Implements one P### in Python + its T### | `claude/agents/sdlc-python-dev.md` |
-| `sdlc-quality-assessor` | exec | `medium` | Read-only maturity assessment and diagnosis of blocked tasks | `claude/agents/sdlc-quality-assessor.md` |
-| `sdlc-rust-dev` | exec | `medium` | Implements one P### in Rust + its T### | `claude/agents/sdlc-rust-dev.md` |
-| `sdlc-system-analyst` | exec | `medium` | Breaks the architecture down into `3_conception.md` (P###) | `claude/agents/sdlc-system-analyst.md` |
-| `sdlc-test-designer` | exec | `medium` | Test cases T###:P### in `4_tests.md` | `claude/agents/sdlc-test-designer.md` |
+| Agent | Tier | Effort | Model | Role | Source |
+|---|---|---|---|---|---|
+| `sdlc-architect` | design | `high` | `claude-opus-5-5` | Writes `2_architecture.md` (A###:E### + ADR) | `claude/agents/sdlc-architect.md` |
+| `sdlc-archive-manager` | simple | default | `claude-haiku-5-5` | Archives non-essential session artifacts (`/sdlc:exit`) | `claude/agents/sdlc-archive-manager.md` |
+| `sdlc-business-analyst` | exec | `high` | `claude-sonnet-5-5` | Requirements E### with MoSCoW and BDD criteria | `claude/agents/sdlc-business-analyst.md` |
+| `sdlc-code-auditor` | simple | default | `claude-haiku-5-5` | Read-only observation of an existing project (`/sdlc:import`) | `claude/agents/sdlc-code-auditor.md` |
+| `sdlc-discussion-facilitator` | design | `xhigh` | `claude-opus-5-5` | ADR drafts in `2_5_discussion.md` | `claude/agents/sdlc-discussion-facilitator.md` |
+| `sdlc-go-dev` | exec | `high` | `claude-sonnet-5-5` | Implements one P### in Go + its T### | `claude/agents/sdlc-go-dev.md` |
+| `sdlc-js-dev` | exec | `high` | `claude-sonnet-5-5` | Implements one P### in JavaScript/TypeScript + its T### | `claude/agents/sdlc-js-dev.md` |
+| `sdlc-python-dev` | exec | `high` | `claude-sonnet-5-5` | Implements one P### in Python + its T### | `claude/agents/sdlc-python-dev.md` |
+| `sdlc-quality-assessor` | exec | `high` | `claude-sonnet-5-5` | Read-only maturity assessment and diagnosis of blocked tasks | `claude/agents/sdlc-quality-assessor.md` |
+| `sdlc-rust-dev` | exec | `high` | `claude-sonnet-5-5` | Implements one P### in Rust + its T### | `claude/agents/sdlc-rust-dev.md` |
+| `sdlc-system-analyst` | exec | `high` | `claude-sonnet-5-5` | Breaks the architecture down into `3_conception.md` (P###) | `claude/agents/sdlc-system-analyst.md` |
+| `sdlc-test-designer` | exec | default | `claude-sonnet-5-5` | Test cases T###:P### in `4_tests.md` | `claude/agents/sdlc-test-designer.md` |

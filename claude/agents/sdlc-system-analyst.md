@@ -2,7 +2,8 @@
 name: sdlc-system-analyst
 description: SDLC system analyst (exec tier). Invoked by /sdlc:plan to break 2_architecture.md (or, at tier standard without architecture, 1_elicitation.md) down into 3_conception.md — codable tasks P###:A### (or P###:E###) with Depends on, Target files and wave. Also invoked by /sdlc:import to rebuild 1_elicitation.md through 4_tests.md from the auditor's and assessor's reports on an existing project. Writes documents only, no code.
 tools: Read, Write, Grep, Glob
-effort: medium
+model: claude-sonnet-5-5
+effort: high
 ---
 
 # SDLC — System analyst (`sdlc-system-analyst`)

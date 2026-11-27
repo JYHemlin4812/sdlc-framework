@@ -2,6 +2,7 @@
 name: sdlc-code-auditor
 description: SDLC code auditor (simple tier). Invoked first by /sdlc:import to observe an existing project without modifying anything — maps structure, stack, documentation and gaps. Input is a project root (SDLC v2 or never under SDLC); output is a read-only observation report used to rebuild the SDLC documents.
 tools: Read, Grep, Glob
+model: claude-haiku-5-5
 effort: low
 ---
 

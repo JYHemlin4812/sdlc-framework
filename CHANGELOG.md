@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Removed every reference to components outside this repository: the interop document, the import line in `CLAUDE.md` (the installer no longer adds, reads or removes it, and keeps it when present), the `--remove-import` option, the external agents and core file in `--remove-core` (which now removes only the `sdlc-*` agents), and the zone of `scan-fuites` that matched an external folder.
 
 ### Changed
+- Agents: each `sdlc-*` agent pins a default model in its frontmatter (`claude-haiku-5-5` for simple, `claude-sonnet-5-5` for exec, `claude-opus-5-5` for design); a model resolved from `model_profile` and passed to the subagent call still takes precedence. Effort raised: exec agents `high` (test-designer keeps the default), `sdlc-discussion-facilitator` `xhigh`. `AGENTS.md` and `model-profiles.md` updated.
 - `verify` (Python) returns 2 (unavailable) when HEAD holds no file of the SDLC domain, instead of the vacuous 0 of the scripts (decision of 2026-11-26).
 - Uninstall removes only the bundle files whose hash matches the install manifest (`file_hashes`); a personal or hand-modified file in an SDLC folder is kept and reported. An older install whose manifest has no `file_hashes` keeps the previous behavior, with a warning before removal.
 

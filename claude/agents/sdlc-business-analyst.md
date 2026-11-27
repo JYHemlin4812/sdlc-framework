@@ -2,7 +2,8 @@
 name: sdlc-business-analyst
 description: SDLC business analyst (exec tier). Invoked by /sdlc:brainstorm on M/L projects to turn the raw need and the elicitation answers into requirements E### with MoSCoW priority and BDD acceptance criteria (Given/When/Then), for 1_elicitation.md. Covers the what and why, never the how.
 tools: Read, Write, WebSearch
-effort: medium
+model: claude-sonnet-5-5
+effort: high
 ---
 
 # SDLC — Business analyst (`sdlc-business-analyst`)

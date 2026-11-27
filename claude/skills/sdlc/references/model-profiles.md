@@ -66,16 +66,16 @@ Effort controls how much the model thinks and how thoroughly it works. In v4.0 i
 
 | Tier | `effort` | Agents |
 |---|---|---|
-| `simple` | `low` | code-auditor, archive-manager |
-| `exec` | `medium` | python-dev, js-dev, go-dev, rust-dev, business-analyst, system-analyst, test-designer, quality-assessor |
-| `design` | `high` | architect, discussion-facilitator |
+| `simple` | default (no key) | code-auditor, archive-manager |
+| `exec` | `high` (test-designer: default) | python-dev, js-dev, go-dev, rust-dev, business-analyst, system-analyst, quality-assessor, test-designer |
+| `design` | `high` (discussion-facilitator: `xhigh`) | architect, discussion-facilitator |
 
 - **Where it is set**: the `effort:` key in each agent's frontmatter
   (`claude/agents/sdlc-*.md`; Claude Code accepts `low|medium|high|xhigh|max`). It is not a
   `sdlc-config.json` field and `model_profiler.py` does not resolve it. To change it, edit the
   agent file.
-- **Why medium for `exec`**: `medium` is the Opus 5.5 default, and at `medium` Opus 5.5 performs
-  roughly like Opus 5 at `high`.
+- **Why high for `exec`**: the `exec` agents run on Sonnet 5.5 (see the frontmatter model below),
+  where `high` gives more thorough implementation and analysis than the default.
 - **Less thinking**: to make an agent faster or cheaper, lower its effort rather than adding
   "be brief / don't overthink" to the prompt.
 - **`xhigh` / `max`**: reserve them for agents where you have measured a gain; they cost more
@@ -83,6 +83,14 @@ Effort controls how much the model thinks and how thoroughly it works. In v4.0 i
 - Effort applies to whichever model the profile resolves, but the available levels depend on the
   model (see the Claude Code subagent docs). If you run the `budget` profile, check that the
   model resolved for each agent supports the level set in its frontmatter.
+
+## Frontmatter model
+
+Each agent file also pins a default model in its frontmatter (`model:`): `simple` agents
+`claude-haiku-5-5`, `exec` agents `claude-sonnet-5-5`, `design` agents `claude-opus-5-5`. It is
+used when the caller does not pass a model. When the orchestrator resolves one with
+`model_profiler.py` and passes it to the subagent call, that model takes precedence over the
+frontmatter, so `model_profile` and `model_overrides` still apply.
 
 ## Which profile when
 

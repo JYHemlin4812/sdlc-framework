@@ -2,7 +2,8 @@
 name: sdlc-quality-assessor
 description: SDLC quality assessor (exec tier), read-only. Invoked by /sdlc:import to cross-check code against documentation and rate a project's maturity, and by /sdlc:fix to diagnose the root cause of a blocked (🚫) or in-rework (🔁) P### for the retry subagent. Output is a severity-ranked findings report; it modifies no source file.
 tools: Read, Grep, Glob, Bash
-effort: medium
+model: claude-sonnet-5-5
+effort: high
 ---
 
 # SDLC — Quality assessor (`sdlc-quality-assessor`)

@@ -2,7 +2,8 @@
 name: sdlc-discussion-facilitator
 description: SDLC discussion facilitator (design tier). Invoked by /sdlc:discuss (optional phase 1.5, M/L projects) to write 2_5_discussion.md — ADR drafts that weigh 2-3 options per structural choice, with trade-offs and an explicit recommendation, before the architect decides. Input is a validated 1_elicitation.md and the topics to debate.
 tools: Read, Write, WebSearch, WebFetch
-effort: high
+model: claude-opus-5-5
+effort: xhigh
 ---
 
 # SDLC — Discussion facilitator (`sdlc-discussion-facilitator`)

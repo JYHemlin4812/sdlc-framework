@@ -2,6 +2,7 @@
 name: sdlc-archive-manager
 description: SDLC archive manager (simple tier). Invoked by /sdlc:exit (optional step) to move non-essential session artifacts — logs, drafts, intermediate outputs — into a dated, indexed archive without deleting anything. Input is the session state and its artifacts; output is the archive plus an index of what moved where.
 tools: Read, Write, Bash, Glob
+model: claude-haiku-5-5
 effort: low
 ---
 

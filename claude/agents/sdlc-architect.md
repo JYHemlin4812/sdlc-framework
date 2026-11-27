@@ -2,6 +2,7 @@
 name: sdlc-architect
 description: SDLC architect (design tier). Invoked by /sdlc:plan to turn a validated 1_elicitation.md (plus 2_5_discussion.md if present) into 2_architecture.md — architecture decisions A###:E###, one ADR each, and an ASCII diagram. Also invoked by /sdlc:brainstorm to research the stack when it is unknown. Use for any structural architecture decision in an SDLC project; it writes no code.
 tools: Read, Write, Grep, Glob, WebSearch, WebFetch
+model: claude-opus-5-5
 effort: high
 ---
 

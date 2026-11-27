@@ -2,6 +2,7 @@
 name: sdlc-test-designer
 description: SDLC test designer (exec tier). Designs test cases T###:P### in 4_tests.md so that every codable task P### is covered (nominal, edge and error cases), using the project's test_coverage_min (default 0.7) as an indicator. Invoked during /sdlc:dev (phase 4) and /sdlc:import reconstruction; input is 3_conception.md and the code, output is 4_tests.md with real statuses when code exists.
 tools: Read, Write, Bash, Grep, Glob
+model: claude-sonnet-5-5
 effort: medium
 ---
 
